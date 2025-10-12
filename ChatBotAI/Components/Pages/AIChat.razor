@@ -1,5 +1,5 @@
 ﻿@page "/Viet-Hung ChatBot AI"
-@using ChatBotAI.Model
+@using ChatBotAI.Application.DTOs.ConversationDTO
 @using Markdig
 @using Microsoft.Extensions.AI;
 @using System.Text
@@ -30,20 +30,20 @@
 @code {
     private string userInput = string.Empty;
     private ElementReference messagesContainer;
-    private List<ChatMessageModel> Messages = new List<ChatMessageModel>();
+    private List<MessageDTO> Messages = new List<MessageDTO>();
     private bool isStreaming = false;
     private async Task SendMessage()
     {
         if (string.IsNullOrWhiteSpace(userInput) || isStreaming) return;
         //Thêm vào đoạn chat của người dùng
-        Messages.Add(new ChatMessageModel
+        Messages.Add(new MessageDTO
             {
                 Content = userInput,
                 IsUser = true
             });
         //Chuẩn bị phản hồi của AI
         var aiResponse = new StringBuilder();
-        Messages.Add(new ChatMessageModel
+        Messages.Add(new MessageDTO
             {
                 Content = "",
                 IsUser = false
@@ -90,5 +90,5 @@
             await SendMessage();
         }
     }
-    [Inject] private IJSRuntime JSRuntime { get; set; }
+    [Inject] private IJSRuntime JSRuntime { get; set; } = null!;
 }

@@ -12,4 +12,9 @@
     <PackageReference Include="OllamaSharp" Version="5.4.7" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\ChatBotAI.Application\ChatBotAI.Application.csproj" />
+    <ProjectReference Include="..\ChatBotAI.Infrastructure\ChatBotAI.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>

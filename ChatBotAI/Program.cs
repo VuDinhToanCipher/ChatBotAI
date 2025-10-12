@@ -1,12 +1,15 @@
 using ChatBotAI.Components;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
-
+using ChatBotAI.Application;
+using ChatBotAI.Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure();
 
 IChatClient chatClient = new OllamaApiClient(new Uri("http://localhost:11434"),"llama3.2");
 
