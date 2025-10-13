@@ -1,8 +1,11 @@
-﻿namespace ChatBotAI.Application.DTOs.ConversationDTO
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace ChatBotAI.Domain.Conversations
 {
-    public class MessageDTO
+    public class Messages
     {
-        public Guid MessageId { get; set; } 
+        [Key]
+        public Guid MessageId { get; set; } = Guid.NewGuid();
         public Guid ConversationId { get; set; }
         public string Content { get; set; } = string.Empty;
         public bool IsUser { get; set; }
