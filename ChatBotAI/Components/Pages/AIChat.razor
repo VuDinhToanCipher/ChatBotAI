@@ -1,94 +1,179 @@
 ﻿@page "/"
+@using ChatApp1.Services
 @using ChatBotAI.Application.DTOs.ConversationDTO
 @using Markdig
-@using Microsoft.Extensions.AI;
+@using Microsoft.Extensions.AI
 @using System.Text
-@rendermode InteractiveServer
+@using System.ComponentModel
 @inject IChatClient ChatClient
+@inject NavigationManager Nav
+@inject SemanticSearch Search
+@implements IDisposable
+@rendermode InteractiveServer
+@inject IJSRuntime JSRuntime
+
 <h3>Việt - Hung ChatBot</h3>
+
 <div class="chat-container">
     <div class="chat-messages" @ref="messagesContainer">
-        @foreach(var message in Messages)
+        @if (Messages.Count == 0)
         {
-            <div class="message @(message.IsUser ? "user-message" : "ai-message")"> 
-                @((MarkupString) Markdown.ToHtml(message.Content))
-            </div>
+
+        }
+        else
+        {
+            @foreach (var message in Messages)
+            {
+                <div class="message @(message.IsUser ? "user-message" : "ai-message")">
+                    @((MarkupString)Markdown.ToHtml(message.Content))
+                </div>
+            }
         }
     </div>
+
     <div class="chat-input-area">
         <input type="text"
-            @bind="userInput"
-            @bind:event = "oninput"
-            @onkeyup = "HandleKeyUp"
-            placeholder="Nhập câu hỏi của bạn ..."
-            class="chat-input"/>
-        <button @onclick="SendMessage" class="send-button" disabled ="@isStreaming">Gửi</button>
+               @bind="userInput"
+               @bind:event="oninput"
+               @onkeyup="HandleKeyUp"
+               placeholder="Nhập câu hỏi của bạn ..."
+               class="chat-input" />
+        <button @onclick="SendMessage" class="send-button" disabled="@isStreaming">Gửi</button>
     </div>
 </div>
 
-
 @code {
+    private const string SystemPrompt = @"
+        You are an assistant who answers questions about information you retrieve.
+        Do not answer questions about anything else.
+        Use only simple markdown to format your responses.
+
+        Use the search tool to find relevant information. When you do this, end your
+        reply with citations in the special XML format:
+
+        <citation filename='string' page_number='number'>exact quote here</citation>
+
+        Always include the citation in your response if there are results.
+
+        The quote must be max 5 words, taken word-for-word from the search result, and is the basis for why the citation is relevant.
+        Don't refer to the presence of citations; just emit these tags right at the end, with no surrounding text.
+        ";
+
     private string userInput = string.Empty;
     private ElementReference messagesContainer;
-    private List<MessageDTO> Messages = new List<MessageDTO>();
+    private List<MessageDTO> Messages = new();
+    private List<ChatMessage> messages = new();
     private bool isStreaming = false;
+    private int statefulMessageCount;
+    private readonly ChatOptions chatOptions = new();
+    private CancellationTokenSource? currentResponseCancellation;
+
+    protected override void OnInitialized()
+    {
+        statefulMessageCount = 0;
+        messages.Add(new ChatMessage(ChatRole.System, SystemPrompt));
+        chatOptions.Tools = [AIFunctionFactory.Create(SearchAsync)];
+    }
+
     private async Task SendMessage()
     {
         if (string.IsNullOrWhiteSpace(userInput) || isStreaming) return;
-        //Thêm vào đoạn chat của người dùng
-        Messages.Add(new MessageDTO
-            {
-                Content = userInput,
-                IsUser = true
-            });
-        //Chuẩn bị phản hồi của AI
-        var aiResponse = new StringBuilder();
-        Messages.Add(new MessageDTO
-            {
-                Content = "",
-                IsUser = false
-            });
-        //Gửi câu hỏi của người dùng cho AI
+
+        CancelAnyCurrentResponse();
+
+        // Add user message to UI and internal state
+        Messages.Add(new MessageDTO { Content = userInput, IsUser = true });
+        var userMessage = new ChatMessage(ChatRole.User, userInput);
+        messages.Add(userMessage);
+
+        // Prepare AI response
+        var responseText = new StringBuilder();
+        Messages.Add(new MessageDTO { Content = "", IsUser = false });
+        currentResponseCancellation = new();
+
         try
         {
             isStreaming = true;
-            await foreach(var chunk in ChatClient.GetStreamingResponseAsync
-                (new ChatMessage[]
-                {
-                    new ChatMessage(ChatRole.User,userInput)
-                }))
+
+            // Stream AI response
+            await foreach (var update in ChatClient.GetStreamingResponseAsync(
+                messages.Skip(statefulMessageCount), chatOptions, currentResponseCancellation.Token))
             {
-                if(chunk.Text != null)
+                if (update.Text != null)
                 {
-                    aiResponse.Append(chunk.Text);
-                    Messages[^1].Content = aiResponse.ToString();
+                    responseText.Append(update.Text);
+                    Messages[^1].Content = responseText.ToString();
                     await InvokeAsync(StateHasChanged);
-                    //Cuộn xuống cuối trang
                     await ScrollToBottom();
                 }
             }
 
+            // Store final response
+            var finalResponse = new ChatMessage(ChatRole.Assistant, responseText.ToString());
+            messages.Add(finalResponse);
+            statefulMessageCount = chatOptions.ConversationId is not null ? messages.Count : 0;
         }
         catch (Exception ex)
         {
-            Messages[^1].Content = $"Error : {ex.Message}";
+            Messages[^1].Content = $"Error: {ex.Message}";
         }
         finally
         {
             isStreaming = false;
             userInput = string.Empty;
+            currentResponseCancellation?.Dispose();
+            currentResponseCancellation = null;
+            await InvokeAsync(StateHasChanged);
+            await ScrollToBottom();
         }
     }
+
     private async Task ScrollToBottom()
     {
         await JSRuntime.InvokeVoidAsync("scrollToBottom", messagesContainer);
     }
+
     private async Task HandleKeyUp(KeyboardEventArgs e)
     {
-        if(e.Key == "Enter")
+        if (e.Key == "Enter")
         {
             await SendMessage();
         }
     }
-    [Inject] private IJSRuntime JSRuntime { get; set; } = null!;
+
+    private void CancelAnyCurrentResponse()
+    {
+        currentResponseCancellation?.Cancel();
+        currentResponseCancellation?.Dispose();
+        currentResponseCancellation = null;
+    }
+
+    private async Task ResetConversationAsync()
+    {
+        CancelAnyCurrentResponse();
+        Messages.Clear();
+        messages.Clear();
+        messages.Add(new ChatMessage(ChatRole.System, SystemPrompt));
+        chatOptions.ConversationId = null;
+        statefulMessageCount = 0;
+        await InvokeAsync(StateHasChanged);
+        await ScrollToBottom();
+    }
+
+    [Description("Searches for information using a phrase or keyword")]
+    private async Task<IEnumerable<string>> SearchAsync(
+        [Description("The phrase to search for.")] string searchPhrase,
+        [Description("If possible, specify the filename to search that file only. If not provided or empty, the search includes all files.")] string? filenameFilter = null)
+    {
+        await InvokeAsync(StateHasChanged);
+        var results = await Search.SearchAsync(searchPhrase, filenameFilter, maxResults: 5);
+        return results.Select(result =>
+            $"<result filename=\"{result.DocumentId}\" page_number=\"{result.PageNumber}\">{result.Text}</result>");
+    }
+
+    public void Dispose()
+    {
+        currentResponseCancellation?.Cancel();
+        currentResponseCancellation?.Dispose();
+    }
 }
