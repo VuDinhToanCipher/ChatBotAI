@@ -17,7 +17,12 @@ public class PDFDirectorySource(string sourceDirectory) : IIngestionSource
     {
         var results = new List<IngestedDocument>();
         var sourceFiles = Directory.GetFiles(sourceDirectory, "*.pdf");
-        var existingDocumentsById = existingDocuments.ToDictionary(d => d.DocumentId);
+        var existingDocumentsById = new Dictionary<string, IngestedDocument>();
+        foreach (var doc in existingDocuments)
+        {
+            existingDocumentsById[doc.DocumentId] = doc; 
+        }
+
 
         foreach (var sourceFile in sourceFiles)
         {

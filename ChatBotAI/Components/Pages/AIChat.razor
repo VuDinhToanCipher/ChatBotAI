@@ -11,9 +11,7 @@
 @implements IDisposable
 @rendermode InteractiveServer
 @inject IJSRuntime JSRuntime
-
 <h3>Việt - Hung ChatBot</h3>
-
 <div class="chat-container">
     <div class="chat-messages" @ref="messagesContainer">
         @if (Messages.Count == 0)
@@ -29,7 +27,6 @@
             }
         }
     </div>
-
     <div class="chat-input-area">
         <input type="text"
                @bind="userInput"
@@ -43,20 +40,29 @@
 
 @code {
     private const string SystemPrompt = @"
-        You are an assistant who answers questions about information you retrieve.
-        Do not answer questions about anything else.
-        Use only simple markdown to format your responses.
+You are a friendly and intelligent assistant who communicates in English.
 
-        Use the search tool to find relevant information. When you do this, end your
-        reply with citations in the special XML format:
+Response rules:
 
-        <citation filename='string' page_number='number'>exact quote here</citation>
+1. When the user greets you or asks casual small-talk questions:
+   - Reply naturally and politely, like a human.
+   - DO NOT use the search tool or any document data.
 
-        Always include the citation in your response if there are results.
+2. When the user asks for factual information that requires looking up documents or data:
+   - Use the search tool to retrieve information.
+   - Always include accurate citations in XML format:
+     <citation filename='string' page_number='number'>exact quote here</citation>
+   - Each citation must be a short phrase (≤5 words) taken verbatim from the source document.
 
-        The quote must be max 5 words, taken word-for-word from the search result, and is the basis for why the citation is relevant.
-        Don't refer to the presence of citations; just emit these tags right at the end, with no surrounding text.
-        ";
+3. If the search tool returns no results:
+   - DO NOT make up any information.
+   - Reply, for example: ""Sorry, I don't have accurate information on that question.""
+
+4. Always check if the question really requires a search before using the search tool.
+
+5. Use simple Markdown to format your responses; do not include images or HTML.
+6.- Answer only what the user asks. Do not combine multiple questions into a single response.
+";
 
     private string userInput = string.Empty;
     private ElementReference messagesContainer;
@@ -79,13 +85,11 @@
         if (string.IsNullOrWhiteSpace(userInput) || isStreaming) return;
 
         CancelAnyCurrentResponse();
-
-        // Add user message to UI and internal state
+        //Nội dung của người dùng
         Messages.Add(new MessageDTO { Content = userInput, IsUser = true });
         var userMessage = new ChatMessage(ChatRole.User, userInput);
         messages.Add(userMessage);
-
-        // Prepare AI response
+        //Nội dung AI
         var responseText = new StringBuilder();
         Messages.Add(new MessageDTO { Content = "", IsUser = false });
         currentResponseCancellation = new();
@@ -94,7 +98,7 @@
         {
             isStreaming = true;
 
-            // Stream AI response
+            // Phản hồi của AI
             await foreach (var update in ChatClient.GetStreamingResponseAsync(
                 messages.Skip(statefulMessageCount), chatOptions, currentResponseCancellation.Token))
             {
@@ -106,8 +110,6 @@
                     await ScrollToBottom();
                 }
             }
-
-            // Store final response
             var finalResponse = new ChatMessage(ChatRole.Assistant, responseText.ToString());
             messages.Add(finalResponse);
             statefulMessageCount = chatOptions.ConversationId is not null ? messages.Count : 0;
@@ -126,12 +128,10 @@
             await ScrollToBottom();
         }
     }
-
     private async Task ScrollToBottom()
     {
         await JSRuntime.InvokeVoidAsync("scrollToBottom", messagesContainer);
     }
-
     private async Task HandleKeyUp(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -139,7 +139,6 @@
             await SendMessage();
         }
     }
-
     private void CancelAnyCurrentResponse()
     {
         currentResponseCancellation?.Cancel();
