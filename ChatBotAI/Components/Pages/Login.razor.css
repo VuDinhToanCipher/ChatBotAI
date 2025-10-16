@@ -1,0 +1,110 @@
+﻿/* Căn giữa toàn bộ màn hình */
+.page-wrapper {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #eef1f6;
+}
+
+/* Khung form chính */
+.form-container {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    background-color: #fff;
+    padding: 48px 42px;
+    border-radius: 18px;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.12);
+    width: 100%;
+    max-width: 400px;
+    gap: 20px; /* Khoảng cách giữa các nhóm label+input */
+}
+
+/* Tiêu đề */
+h3 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+/* Mỗi cặp label + input là một nhóm */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Label */
+label {
+    font-weight: 600;
+    color: #444;
+    font-size: 15px;
+}
+
+/* Input */
+input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 15px;
+    transition: 0.2s ease;
+}
+
+    input:focus {
+        outline: none;
+        border-color: #0078d7;
+        box-shadow: 0 0 5px rgba(0, 120, 215, 0.35);
+    }
+
+/* Nút đăng nhập */
+button {
+    width: 100%;
+    background-color: #0078d7;
+    color: white;
+    border: none;
+    padding: 13px;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 15px;
+    margin-top: 10px;
+    transition: background 0.3s, transform 0.1s;
+}
+
+    button:hover {
+        background-color: #005ea6;
+        transform: translateY(-1px);
+    }
+
+/* Alert */
+.alert {
+    background-color: #fdecea;
+    color: #c62828;
+    border-left: 4px solid #c62828;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-top: 8px;
+    text-align: center;
+}
+
+/* Liên kết */
+p {
+    text-align: center;
+    font-size: 14px;
+    color: #555;
+    margin-top: 10px;
+}
+
+    p a {
+        color: #0078d7;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+        p a:hover {
+            text-decoration: underline;
+        }

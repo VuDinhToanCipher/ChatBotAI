@@ -1,0 +1,66 @@
+﻿@page "/registration"
+@using ChatBotAI.Application.DTOs.UserDTO
+@using ChatBotAI.Application.Services.UserServices
+@inject IUserService register
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<div class="page-wrapper">
+    <div class="form-container">
+        <h3>Tạo tài khoản</h3>
+
+        <EditForm Model="@userdto" OnValidSubmit="@HandleRegistration" FormName="Registration">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label>Name:</label>
+                <InputText @bind-Value="userdto.Name" />
+            </div>
+
+            <div class="form-group">
+                <label>UserName:</label>
+                <InputText @bind-Value="userdto.UserName" />
+            </div>
+
+            <div class="form-group">
+                <label>Email:</label>
+                <InputText @bind-Value="userdto.Email" type="email" />
+            </div>
+
+            <div class="form-group">
+                <label>Password:</label>
+                <InputText @bind-Value="userdto.Password" type="password" />
+            </div>
+
+            <button type="submit">Đăng ký</button>
+
+            @if (!string.IsNullOrEmpty(alertmessage))
+            {
+                <div class="alert">@alertmessage</div>
+            }
+
+            <p>Đã có tài khoản? <a href="/login">Đăng nhập</a></p>
+        </EditForm>
+    </div>
+</div>
+
+
+@code {
+    private UserDTO userdto = new();
+    private string alertmessage;
+
+    private async Task HandleRegistration()
+    {
+        try
+        {
+            var registration = await register.AddUserAsync(userdto);
+            alertmessage = registration.Message;
+            if (registration.IsSuccess)
+                NavigationManager.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            alertmessage = $"Lỗi khi đăng ký: {ex.Message}";
+        }
+    }
+}

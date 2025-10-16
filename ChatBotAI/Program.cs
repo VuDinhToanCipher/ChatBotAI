@@ -1,3 +1,4 @@
+using Blazored.SessionStorage;
 using ChatApp1.Services;
 using ChatApp1.Services.Ingestion;
 using ChatBotAI.Application;
@@ -12,6 +13,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddBlazoredSessionStorage();
 
 IChatClient chatClient = new OllamaApiClient(new Uri("http://localhost:11434"),"llama3.2");
 IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator = new OllamaApiClient(new Uri("http://localhost:11434"),
