@@ -1,6 +1,7 @@
 ﻿using ChatBotAI.Application.DTOs.ConversationDTO;
 using ChatBotAI.Domain.Conversations;
 
+
 namespace ChatBotAI.Application.Services.ConversationServices
 {
     public class ConversationService : IConversationService
@@ -10,14 +11,24 @@ namespace ChatBotAI.Application.Services.ConversationServices
         {
             this._conversationRespository = _conversationRespository;
         }
-        public Task<Conversation> AddConversationAsync(ConversationDTO conversation)
+        public async Task<Conversation> AddConversationAsync(ConversationDTO conversation)
         {
-            throw new NotImplementedException();
+            var conver = new Conversation()
+            {
+                UserId = conversation.UserId,
+                Title = conversation.Title,
+            };
+            return await _conversationRespository.AddConversationAsync(conver);  
         }
 
-        public Task<bool> RemoveConversationAsync(Guid conversationId)
+        public async Task<List<Conversation>> GetConversationByUserAsync(Guid UserId)
         {
-            throw new NotImplementedException();
+            return await _conversationRespository.GetConversationByUserAsync(UserId);
+        }
+
+        public async Task<bool> RemoveConversationAsync(Guid conversationId)
+        {
+            return await _conversationRespository.RemoveConversationAsync(conversationId);
         }
 
         public Task<Conversation> ViewConversationAsync(Guid conversationId)

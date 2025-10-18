@@ -44,7 +44,7 @@
             if (response.IsSuccess)
             {
                 var userResponse = response.Message.Split("|");
-                await session.SetItemAsync("Key", userResponse[0]);
+                await session.SetItemAsync("UserID", userResponse[0]);
                 await session.SetItemAsync("Name", userResponse[1]);
                 await session.SetItemAsync("Email", userResponse[2]);
                 navigation.NavigateTo("/");

@@ -1,0 +1,104 @@
+﻿@page "/conversation-history"
+@using ChatBotAI.Application.DTOs.ConversationDTO
+@using ChatBotAI.Application.Services.ConversationServices
+@using ChatBotAI.Domain.Conversations
+@using Blazored.SessionStorage
+@inject IConversationService conversationService
+@inject ISessionStorageService session
+@inject NavigationManager Nav
+@inject IJSRuntime JSRuntime
+
+@rendermode InteractiveServer
+
+<h2 class="page-title">💬 Lịch sử hội thoại</h2>
+
+@if (isLoading)
+{
+    <p class="loading">Đang tải lịch sử...</p>
+}
+else if (!isLoggedIn)
+{
+    <div class="not-logged-in">
+        <p>Bạn chưa đăng nhập để xem lịch sử hội thoại.</p>
+        <div class="auth-buttons">
+            <button class="btn-login" @onclick="GoToLogin">Đăng nhập</button>
+            <button class="btn-register" @onclick="GoToRegister">Đăng ký</button>
+        </div>
+    </div>
+}
+else if (conversations == null || !conversations.Any())
+{
+    <p class="empty">Chưa có hội thoại nào.</p>
+}
+else
+{
+    <ul class="conversation-list">
+        @foreach (var convo in conversations)
+        {
+            <li class="conversation-item">
+                <div class="conversation-info" @onclick="@(() => OpenConversation(convo.ConversationId))">
+                    <strong>@(string.IsNullOrEmpty(convo.Title) ? "Cuộc trò chuyện không tiêu đề" : convo.Title)</strong>
+                    <small>@convo.CreateAt.ToString("dd/MM/yyyy HH:mm")</small>
+                </div>
+                <button class="delete-btn" @onclick="@(async (e) => await DeleteConversation(convo.ConversationId))">🗑️</button>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private List<Conversation> conversations = new();
+    private bool isLoading = true;
+    private bool isLoggedIn = false;
+    private Guid? userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var userIDString = await session.GetItemAsync<string>("UserID");
+            if (!string.IsNullOrEmpty(userIDString) && Guid.TryParse(userIDString, out var guid))
+            {
+                userId = guid;
+                isLoggedIn = true;
+                conversations = await conversationService.GetConversationByUserAsync(userId.Value);
+            }
+            else
+            {
+                isLoggedIn = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Lỗi khi lấy UserID từ sessionStorage: {ex.Message}");
+        }
+        isLoading = false;
+    }
+
+    private void OpenConversation(Guid conversationId)
+    {
+        Nav.NavigateTo($"/chat/{conversationId}");
+    }
+
+    private async Task DeleteConversation(Guid conversationId)
+    {
+        bool confirm = await JSRuntime.InvokeAsync<bool>("confirm", "Bạn có chắc muốn xóa hội thoại này không?");
+        if (!confirm) return;
+        bool deleted = await conversationService.RemoveConversationAsync(conversationId);
+
+        if (deleted)
+        {
+            conversations.RemoveAll(c => c.ConversationId == conversationId);
+            await InvokeAsync(StateHasChanged);
+        }
+        else
+        {
+            Console.WriteLine("Không tìm thấy hội thoại để xóa!");
+        }
+    }
+
+
+    private void GoToLogin() => Nav.NavigateTo("/login");
+    private void GoToRegister() => Nav.NavigateTo("/registration");
+}

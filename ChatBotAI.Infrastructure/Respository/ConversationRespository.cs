@@ -1,4 +1,5 @@
 ﻿using ChatBotAI.Domain.Conversations;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChatBotAI.Infrastructure.Respository
 {
@@ -9,14 +10,53 @@ namespace ChatBotAI.Infrastructure.Respository
         {
             this._context = _context;
         }
-        public Task<Conversation> AddConversationAsync(Conversation conversation)
+        public async Task<Conversation> AddConversationAsync(Conversation conversation)
         {
-            throw new NotImplementedException();
+            try
+            {
+                if (conversation == null)
+                {
+                    throw new ArgumentNullException(nameof(conversation), "Conversation không được null.");
+                }
+
+                if (conversation.UserId == null || conversation.UserId == Guid.Empty)
+                {
+                    throw new ArgumentException("UserId không hợp lệ.", nameof(conversation.UserId));
+                }
+
+                _context.Conversations.Add(conversation);
+                await _context.SaveChangesAsync();
+                Console.WriteLine($"Đã lưu hội thoại với ID: {conversation.ConversationId}");
+                return conversation;
+            }
+            catch (DbUpdateException ex)
+            {
+                Console.WriteLine($"Lỗi DB khi lưu hội thoại: {ex.InnerException?.Message ?? ex.Message}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Lỗi khi lưu hội thoại: {ex.Message}");
+                throw;
+            }
         }
 
-        public Task<bool> RemoveConversationAsync(Guid conversationId)
+        public async Task<List<Conversation>> GetConversationByUserAsync(Guid UserId)
         {
-            throw new NotImplementedException();
+            return await _context.Conversations.Where(c => c.UserId == UserId).OrderByDescending(c => c.CreateAt).ToListAsync();
+        }
+
+        public async Task<bool> RemoveConversationAsync(Guid conversationId)
+        {
+            var result = await _context.Conversations
+                .FirstOrDefaultAsync(c => c.ConversationId == conversationId);
+            if(result == null)
+            {
+                return false;
+            }
+            _context.Remove(result);
+            await _context.SaveChangesAsync();
+            return true;
         }
 
         public Task<Conversation> ViewConversationAsync(Guid conversationId)

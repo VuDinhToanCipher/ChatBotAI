@@ -2,6 +2,7 @@
 {
     public interface IMessageRespository
     {
-        Task<Messages> AddMessageAsync(Guid conversationId, Messages message);
+        Task<Messages> AddMessageAsync(Messages message);
+        Task<List<Messages>> GetMessagesByConversationAsync(Guid conversationId);
     }
 }

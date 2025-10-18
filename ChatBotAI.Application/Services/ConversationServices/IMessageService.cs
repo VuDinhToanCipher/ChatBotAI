@@ -5,6 +5,7 @@ namespace ChatBotAI.Application.Services.ConversationServices
 {
     public interface IMessageService
     {
-        Task<Messages> AddMessageAsync(Guid conversationId, MessageDTO message);
+        Task<Messages> AddMessageAsync(MessageDTO message);
+        Task<List<MessageDTO>> GetMessagesByConversationAsync(Guid conversationId);
     }
 }

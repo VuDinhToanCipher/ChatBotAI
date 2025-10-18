@@ -6,7 +6,7 @@ namespace ChatBotAI.Domain.Conversations
     {
         public Guid ConversationId { get; set; } = Guid.NewGuid();
         public Guid? UserId { get; set; }
-        public DateTime CreateAt { get; set; }
+        public DateTime CreateAt { get; set; } = DateTime.Now;
         public string? Title { get; set; }
         public ICollection<Messages> Messages { get; set; } = new List<Messages>();
         public User user { get; set; }

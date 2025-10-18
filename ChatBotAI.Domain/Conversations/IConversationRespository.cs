@@ -5,5 +5,6 @@
         Task<Conversation> AddConversationAsync(Conversation conversation);
         Task<Conversation> ViewConversationAsync(Guid conversationId);
         Task<bool> RemoveConversationAsync(Guid conversationId);
+        Task<List<Conversation>> GetConversationByUserAsync(Guid UserId);
     }
 }

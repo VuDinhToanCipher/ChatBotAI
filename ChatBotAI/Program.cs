@@ -15,6 +15,7 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddBlazoredSessionStorage();
 
+
 IChatClient chatClient = new OllamaApiClient(new Uri("http://localhost:11434"),"llama3.2");
 IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator = new OllamaApiClient(new Uri("http://localhost:11434"),
     "all-minilm");

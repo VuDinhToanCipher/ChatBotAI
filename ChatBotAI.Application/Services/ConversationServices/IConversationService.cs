@@ -7,5 +7,6 @@ namespace ChatBotAI.Application.Services.ConversationServices
         Task<Conversation> AddConversationAsync(ConversationDTO conversation);
         Task<Conversation> ViewConversationAsync(Guid conversationId);
         Task<bool> RemoveConversationAsync(Guid conversationId);
+        Task<List<Conversation>> GetConversationByUserAsync(Guid UserId);
     }
 }

@@ -4,8 +4,8 @@
     {
         public Guid MessageId { get; set; } 
         public Guid ConversationId { get; set; }
-        public string Content { get; set; } = string.Empty;
+        public string Content { get; set; }
         public bool IsUser { get; set; }
-        public DateTime CreateAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreateAt { get; set; } 
     }
 }

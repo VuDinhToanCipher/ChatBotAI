@@ -10,9 +10,29 @@ namespace ChatBotAI.Application.Services.ConversationServices
         {
             this._messageRespository = messageRespository;
         }
-        public Task<Messages> AddMessageAsync(Guid conversationId, MessageDTO message)
+        public async Task<Messages> AddMessageAsync(MessageDTO message)
         {
-            throw new NotImplementedException();
+            var sentence = new Messages
+            {
+                ConversationId = message.ConversationId,
+                Content = message.Content,
+                IsUser = message.IsUser,
+            };
+            return await _messageRespository.AddMessageAsync(sentence);
+        }
+
+        public async Task<List<MessageDTO>> GetMessagesByConversationAsync(Guid conversationId)
+        {
+            var message = await _messageRespository.GetMessagesByConversationAsync(conversationId);
+            return message.Select(m => new MessageDTO
+            {
+                MessageId = m.MessageId,
+                ConversationId = m.ConversationId,
+                Content = m.Content,
+                IsUser = m.IsUser,
+                CreateAt = m.CreateAt
+
+            }).ToList();      
         }
     }
 }

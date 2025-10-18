@@ -1,4 +1,5 @@
 ﻿using ChatBotAI.Domain.Conversations;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChatBotAI.Infrastructure.Respository
 {
@@ -9,9 +10,27 @@ namespace ChatBotAI.Infrastructure.Respository
         {
             this._context = _context;
         }
-        public Task<Messages> AddMessageAsync(Guid conversationId, Messages message)
+        public async Task<Messages> AddMessageAsync(Messages message)
         {
-            throw new NotImplementedException();
+            try
+            {
+                _context.Messages.Add(message);
+                await _context.SaveChangesAsync();
+                return message;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception();
+            }
         }
+
+            public async Task<List<Messages>> GetMessagesByConversationAsync(Guid conversationId)
+            {
+                var value = await _context.Messages
+                    .Where(c => c.ConversationId == conversationId)
+                    .OrderBy(c => c.CreateAt)
+                    .ToListAsync();
+                return value;
+            }
     }
 }

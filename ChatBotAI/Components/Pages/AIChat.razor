@@ -1,6 +1,8 @@
 ﻿@page "/"
+@page "/chat/{conversationId:guid}"
 @using ChatApp1.Services
 @using ChatBotAI.Application.DTOs.ConversationDTO
+@using ChatBotAI.Application.Services.ConversationServices
 @using Markdig
 @using Microsoft.Extensions.AI
 @using System.Text
@@ -11,18 +13,25 @@
 @implements IDisposable
 @rendermode InteractiveServer
 @inject IJSRuntime JSRuntime
+@using Blazored.SessionStorage
+@inject ISessionStorageService session
+@inject IConversationService conversation
+@inject IMessageService addmessage
+
+
 <h3>Việt - Hung ChatBot</h3>
 <div class="chat-container">
     <div class="chat-messages" @ref="messagesContainer">
         @if (Messages.Count == 0)
         {
+            <div class="empty-message">Bắt đầu trò chuyện nào!</div>
         }
         else
         {
             @foreach (var message in Messages)
             {
                 <div class="message @(message.IsUser ? "user-message" : "ai-message")">
-                    @((MarkupString)Markdown.ToHtml(message.Content))
+                    @((MarkupString)Markdown.ToHtml(message.Content ?? ""))
                 </div>
             }
         }
@@ -33,37 +42,43 @@
                @bind:event="oninput"
                @onkeyup="HandleKeyUp"
                placeholder="Nhập câu hỏi của bạn ..."
-               class="chat-input" />
-        <button @onclick="SendMessage" class="send-button" disabled="@isStreaming">Gửi</button>
+               class="chat-input"
+               disabled="@isStreaming" />
+        <button @onclick="SendMessage" class="send-button" disabled="@isStreaming">
+            @(isStreaming ? "Đang xử lý..." : "Gửi")
+        </button>
+        
     </div>
 </div>
 
 @code {
     private const string SystemPrompt = @"
-You are a friendly and intelligent assistant who communicates in English.
+You are a friendly and intelligent assistant who communicates in Vietnamese.
 
 Response rules:
 
-1. When the user greets you or asks casual small-talk questions:
-   - Reply naturally and politely, like a human.
+1. When the user greets you or asks casual small-talk questions (e.g., 'xin chào', 'hi', 'chào bạn'):
+   - Reply naturally, politely, and concisely, like a human (e.g., 'Chào bạn! Hôm nay mình có thể giúp gì?').
    - DO NOT use the search tool or any document data.
+   - Encourage further conversation by inviting the user to ask something specific.
 
-2. When the user asks for factual information that requires looking up documents or data:
+2. When the user asks for factual information that requires looking up documents or data (e.g., contains keywords like 'lịch học', 'học phí', 'tuyển sinh'):
    - Use the search tool to retrieve information.
    - Always include accurate citations in XML format:
      <citation filename='string' page_number='number'>exact quote here</citation>
    - Each citation must be a short phrase (≤5 words) taken verbatim from the source document.
 
-3. If the search tool returns no results:
+3. If the search tool returns no results or results that don't match the query well (e.g., general info instead of specific details):
    - DO NOT make up any information.
-   - Reply, for example: ""Sorry, I don't have accurate information on that question.""
+   - Politely explain the limitation and ask for clarification (e.g., 'Bạn có thể cho tôi biết ngành học hoặc thời gian cụ thể không?').
+   - Suggest reliable external sources if relevant (e.g., 'Bạn có thể kiểm tra trang chính thức của trường tại viu.edu.vn').
 
-4. Always check if the question really requires a search before using the search tool.
+4. Always check if the question explicitly requires a search before using the search tool. If the query is ambiguous or purely conversational, avoid searching and respond based on context or ask for clarification.
 
 5. Use simple Markdown to format your responses; do not include images or HTML.
-6.- Answer only what the user asks. Do not combine multiple questions into a single response.
-";
 
+6. Answer only what the user asks, but if the query is repeated, vague, or unclear, gently guide the conversation to get better results without combining unrelated topics.
+";
     private string userInput = string.Empty;
     private ElementReference messagesContainer;
     private List<MessageDTO> Messages = new();
@@ -72,12 +87,38 @@ Response rules:
     private int statefulMessageCount;
     private readonly ChatOptions chatOptions = new();
     private CancellationTokenSource? currentResponseCancellation;
-
-    protected override void OnInitialized()
+    private Guid? currentConversationId;
+    private Guid? userId;
+    [Parameter] public Guid? conversationId { get; set; }
+    protected override async Task OnInitializedAsync()
     {
+
         statefulMessageCount = 0;
         messages.Add(new ChatMessage(ChatRole.System, SystemPrompt));
         chatOptions.Tools = [AIFunctionFactory.Create(SearchAsync)];
+        if (conversationId.HasValue)
+        {
+            Messages = await addmessage.GetMessagesByConversationAsync(conversationId.Value);
+            currentConversationId = conversationId;
+        }
+        // Lấy userId từ sessionStorage
+        try
+        {
+            var userIDString = await session.GetItemAsync<string>("UserID");
+            if (!string.IsNullOrEmpty(userIDString) && Guid.TryParse(userIDString, out var guid))
+            {
+                userId = guid;
+                Console.WriteLine($"Đã lấy userId: {userId}");
+            }
+            else
+            {
+                Console.WriteLine("Không tìm thấy hoặc UserID không hợp lệ trong sessionStorage.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Lỗi khi lấy UserID từ sessionStorage: {ex.Message}");
+        }
     }
 
     private async Task SendMessage()
@@ -85,38 +126,98 @@ Response rules:
         if (string.IsNullOrWhiteSpace(userInput) || isStreaming) return;
 
         CancelAnyCurrentResponse();
-        //Nội dung của người dùng
-        Messages.Add(new MessageDTO { Content = userInput, IsUser = true });
-        var userMessage = new ChatMessage(ChatRole.User, userInput);
-        messages.Add(userMessage);
-        //Nội dung AI
+
+        // Thêm tin nhắn người dùng
+        var userMessage = new MessageDTO { Content = userInput, IsUser = true, ConversationId = currentConversationId ?? Guid.Empty };
+        Messages.Add(userMessage);
+        messages.Add(new ChatMessage(ChatRole.User, userInput));
+
+        // Tạo hội thoại chỉ khi đã đăng nhập
+        if (userId.HasValue && currentConversationId == null)
+        {
+            try
+            {
+                var title = string.IsNullOrWhiteSpace(userInput) ? "Không có tiêu đề" : userInput.Substring(0, Math.Min(userInput.Length, 50));
+                var conversationDTO = new ConversationDTO
+                {
+                    UserId = userId.Value,
+                    Title = title
+                };
+                var createdConversation = await conversation.AddConversationAsync(conversationDTO);
+                if (createdConversation?.ConversationId != Guid.Empty)
+                {
+                    currentConversationId = createdConversation.ConversationId;
+                    userMessage.ConversationId = currentConversationId.Value;
+                    // Lưu tin nhắn người dùng
+                    await addmessage.AddMessageAsync(userMessage);
+                    Console.WriteLine($"Đã tạo hội thoại với ID: {currentConversationId}");
+                }
+                else
+                {
+                    Messages.Add(new MessageDTO { Content = "Không thể tạo hội thoại. Vui lòng thử lại.", IsUser = false });
+                    Console.WriteLine("Tạo hội thoại thất bại: ConversationId không hợp lệ.");
+                    await InvokeAsync(StateHasChanged);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Messages.Add(new MessageDTO { Content = "Không thể lưu hội thoại. Vui lòng thử lại.", IsUser = false });
+                Console.WriteLine($"Lỗi khi tạo hội thoại: {ex.Message}");
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+        }
+
         var responseText = new StringBuilder();
-        Messages.Add(new MessageDTO { Content = "", IsUser = false });
-        currentResponseCancellation = new();
+        var aiMessage = new MessageDTO { Content = "", IsUser = false, ConversationId = currentConversationId ?? Guid.Empty };
+        Messages.Add(aiMessage);
+        currentResponseCancellation = new CancellationTokenSource();
 
         try
         {
             isStreaming = true;
+            await InvokeAsync(StateHasChanged);
 
-            // Phản hồi của AI
+            // Gọi API AI
             await foreach (var update in ChatClient.GetStreamingResponseAsync(
                 messages.Skip(statefulMessageCount), chatOptions, currentResponseCancellation.Token))
             {
                 if (update.Text != null)
                 {
                     responseText.Append(update.Text);
-                    Messages[^1].Content = responseText.ToString();
+                    aiMessage.Content = responseText.ToString();
                     await InvokeAsync(StateHasChanged);
-                    await ScrollToBottom();
                 }
             }
-            var finalResponse = new ChatMessage(ChatRole.Assistant, responseText.ToString());
-            messages.Add(finalResponse);
+
+            // Lưu tin nhắn AI nếu đã đăng nhập
+            if (userId.HasValue && currentConversationId.HasValue)
+            {
+                try
+                {
+                    aiMessage.ConversationId = currentConversationId.Value;
+                    await addmessage.AddMessageAsync(aiMessage);
+                    Console.WriteLine($"Đã lưu tin nhắn AI cho hội thoại: {currentConversationId}");
+                }
+                catch (Exception ex)
+                {
+                    aiMessage.Content = $"{aiMessage.Content}\n\n(Lưu tin nhắn thất bại, vui lòng thử lại.)";
+                    Console.WriteLine($"Lỗi khi lưu tin nhắn AI: {ex.Message}");
+                }
+            }
+
+            messages.Add(new ChatMessage(ChatRole.Assistant, responseText.ToString()));
             statefulMessageCount = chatOptions.ConversationId is not null ? messages.Count : 0;
+        }
+        catch (OperationCanceledException)
+        {
+            aiMessage.Content = "Đã hủy phản hồi.";
         }
         catch (Exception ex)
         {
-            Messages[^1].Content = $"Error: {ex.Message}";
+            aiMessage.Content = $"Xin lỗi, đã có lỗi xảy ra: Vui lòng thử lại.";
+            Console.WriteLine($"Lỗi khi gọi AI: {ex}");
         }
         finally
         {
@@ -128,42 +229,41 @@ Response rules:
             await ScrollToBottom();
         }
     }
+
     private async Task ScrollToBottom()
     {
-        await JSRuntime.InvokeVoidAsync("scrollToBottom", messagesContainer);
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("scrollToBottom", messagesContainer);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Lỗi khi cuộn xuống dưới: {ex.Message}");
+        }
     }
+
     private async Task HandleKeyUp(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter")
+        if (e.Key == "Enter" && !isStreaming)
         {
             await SendMessage();
         }
     }
+
     private void CancelAnyCurrentResponse()
     {
-        currentResponseCancellation?.Cancel();
-        currentResponseCancellation?.Dispose();
-        currentResponseCancellation = null;
+        if (currentResponseCancellation != null)
+        {
+            currentResponseCancellation.Cancel();
+            currentResponseCancellation.Dispose();
+            currentResponseCancellation = null;
+        }
     }
-
-    private async Task ResetConversationAsync()
-    {
-        CancelAnyCurrentResponse();
-        Messages.Clear();
-        messages.Clear();
-        messages.Add(new ChatMessage(ChatRole.System, SystemPrompt));
-        chatOptions.ConversationId = null;
-        statefulMessageCount = 0;
-        await InvokeAsync(StateHasChanged);
-        await ScrollToBottom();
-    }
-
     [Description("Searches for information using a phrase or keyword")]
     private async Task<IEnumerable<string>> SearchAsync(
         [Description("The phrase to search for.")] string searchPhrase,
         [Description("If possible, specify the filename to search that file only. If not provided or empty, the search includes all files.")] string? filenameFilter = null)
     {
-        await InvokeAsync(StateHasChanged);
         var results = await Search.SearchAsync(searchPhrase, filenameFilter, maxResults: 5);
         return results.Select(result =>
             $"<result filename=\"{result.DocumentId}\" page_number=\"{result.PageNumber}\">{result.Text}</result>");
@@ -171,7 +271,7 @@ Response rules:
 
     public void Dispose()
     {
-        currentResponseCancellation?.Cancel();
-        currentResponseCancellation?.Dispose();
+        CancelAnyCurrentResponse();
+        GC.SuppressFinalize(this);
     }
 }
