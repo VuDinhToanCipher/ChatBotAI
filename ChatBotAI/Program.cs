@@ -16,9 +16,9 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddBlazoredSessionStorage();
 
 
-IChatClient chatClient = new OllamaApiClient(new Uri("http://localhost:11434"),"llama3.2");
+IChatClient chatClient = new OllamaApiClient(new Uri("http://localhost:11434"), "llama3.2:3b");
 IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator = new OllamaApiClient(new Uri("http://localhost:11434"),
-    "all-minilm");
+    "nomic-embed-text:latest");
 
 var vectorStorePath = Path.Combine(AppContext.BaseDirectory, "vector-store.db");
 var vectorStoreConnectionString = $"Data Source={vectorStorePath}";

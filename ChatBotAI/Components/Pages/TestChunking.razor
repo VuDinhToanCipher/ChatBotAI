@@ -1,0 +1,153 @@
+﻿@page "/test-chunking"
+@attribute [StreamRendering]
+@using ChatApp1.Services
+@using ChatApp1.Services.Ingestion
+@using UglyToad.PdfPig
+@using UglyToad.PdfPig.DocumentLayoutAnalysis.PageSegmenter
+@using UglyToad.PdfPig.DocumentLayoutAnalysis.WordExtractor
+@using Microsoft.SemanticKernel.Text
+@inject IWebHostEnvironment env
+@rendermode InteractiveServer
+
+<h3>🧪 Test PDF Chunking</h3>
+
+<div style="margin: 20px;">
+    <button @onclick="RunTest" class="btn btn-primary">Test Parse PDF</button>
+
+    <hr />
+
+    @if (loading)
+    {
+        <div class="alert alert-info">Đang parse PDF...</div>
+    }
+
+    @if (!string.IsNullOrEmpty(result))
+    {
+        <div class="alert alert-secondary">
+            <pre style="white-space: pre-wrap;">@result</pre>
+        </div>
+    }
+
+    @if (chunks.Any())
+    {
+        <div style="margin-top: 20px;">
+            <h5>📄 Chunks được tạo: @chunks.Count</h5>
+            @foreach (var (chunk, idx) in chunks.Select((c, i) => (c, i)).Take(5))
+            {
+                <div style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-left: 3px solid #007bff;">
+                    <strong>Chunk #@(idx + 1) - Trang @chunk.PageNumber</strong>
+                    <div style="margin-top: 5px; color: #333;">@chunk.Text</div>
+                </div>
+            }
+            @if (chunks.Count > 5)
+            {
+                <div style="margin-top: 10px; color: #666;">... và @(chunks.Count - 5) chunks khác</div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private string result = string.Empty;
+    private bool loading = false;
+    private List<(int PageNumber, string Text)> chunks = new();
+
+    private async Task RunTest()
+    {
+        loading = true;
+        result = string.Empty;
+        chunks.Clear();
+        StateHasChanged();
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                var pdfPath = Path.Combine(env.WebRootPath, "Data", "ThongtintruongdaihocVietHung.pdf");
+
+                sb.AppendLine($"📂 Đường dẫn: {pdfPath}");
+                sb.AppendLine($"📄 File tồn tại: {File.Exists(pdfPath)}");
+
+                if (!File.Exists(pdfPath))
+                {
+                    result = sb.ToString() + "\n❌ File không tồn tại!";
+                    return;
+                }
+
+                sb.AppendLine("\n🔍 Bắt đầu parse PDF...\n");
+
+                using var pdf = PdfDocument.Open(pdfPath);
+                sb.AppendLine($"✅ Mở PDF thành công!");
+                sb.AppendLine($"   Số trang: {pdf.NumberOfPages}");
+
+                var allChunks = new List<(int PageNumber, string Text)>();
+
+                foreach (var page in pdf.GetPages())
+                {
+                    sb.AppendLine($"\n📄 Processing trang {page.Number}...");
+
+                    var letters = page.Letters;
+                    sb.AppendLine($"   Letters: {letters.Count}");
+
+                    if (letters.Count == 0)
+                    {
+                        sb.AppendLine($"   ⚠️ Trang {page.Number} không có text!");
+                        continue;
+                    }
+
+                    var words = NearestNeighbourWordExtractor.Instance.GetWords(letters);
+                    sb.AppendLine($"   Words: {words.Count()}");
+
+                    var textBlocks = DocstrumBoundingBoxes.Instance.GetBlocks(words);
+                    sb.AppendLine($"   Text blocks: {textBlocks.Count}");
+
+                    var pageText = string.Join(Environment.NewLine + Environment.NewLine,
+                        textBlocks.Select(t => t.Text.ReplaceLineEndings(" ")));
+
+                    sb.AppendLine($"   Tổng text length: {pageText.Length}");
+
+                    if (string.IsNullOrWhiteSpace(pageText))
+                    {
+                        sb.AppendLine($"   ⚠️ Không extract được text từ trang {page.Number}!");
+                        continue;
+                    }
+
+                    // Chunk text
+#pragma warning disable SKEXP0050
+                    var pageChunks = TextChunker.SplitPlainTextParagraphs([pageText], 200);
+#pragma warning restore SKEXP0050
+
+                    sb.AppendLine($"   ✅ Tạo được {pageChunks.Count} chunks từ trang {page.Number}");
+
+                    foreach (var chunk in pageChunks)
+                    {
+                        allChunks.Add((page.Number, chunk));
+                    }
+                }
+
+                chunks = allChunks;
+
+                sb.AppendLine($"\n╔════════════════════════════════╗");
+                sb.AppendLine($"║  TỔNG KẾT                      ║");
+                sb.AppendLine($"╚════════════════════════════════╝");
+                sb.AppendLine($"✅ Tổng số chunks: {chunks.Count}");
+
+                if (chunks.Count == 0)
+                {
+                    sb.AppendLine("\n❌ KHÔNG TẠO ĐƯỢC CHUNKS NÀO!");
+                    sb.AppendLine("Có thể PDF chỉ có hình ảnh hoặc text bị encode đặc biệt.");
+                }
+
+                result = sb.ToString();
+            }
+            catch (Exception ex)
+            {
+                result = $"❌ LỖI: {ex.Message}\n\nStack trace:\n{ex.StackTrace}";
+            }
+        });
+
+        loading = false;
+        StateHasChanged();
+    }
+}

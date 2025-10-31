@@ -1,0 +1,170 @@
+﻿@page "/force-recreate"
+@using System.IO
+@using Microsoft.Data.Sqlite
+@rendermode InteractiveServer
+<h3>🔧 Force Recreate Database</h3>
+
+<div style="margin: 20px;">
+    <div class="alert alert-warning">
+        <strong>⚠️ Tool này sẽ:</strong>
+        <ol>
+            <li>Tìm và đóng tất cả connections đến database</li>
+            <li>Xóa file vector-store.db</li>
+            <li>Xóa file vector-store.db-shm và vector-store.db-wal (nếu có)</li>
+        </ol>
+    </div>
+
+    <button @onclick="ForceRe" class="btn btn-danger" disabled="@loading">
+        @(loading ? "Đang xử lý..." : "🗑️ FORCE DELETE & RECREATE")
+    </button>
+
+    <hr />
+
+    @if (!string.IsNullOrEmpty(result))
+    {
+        <div class="alert @(success ? "alert-success" : "alert-danger")">
+            <pre style="white-space: pre-wrap;">@result</pre>
+        </div>
+    }
+</div>
+
+@code {
+    private string result = string.Empty;
+    private bool loading = false;
+    private bool success = false;
+
+    private async Task ForceRe()
+    {
+        loading = true;
+        success = false;
+        result = string.Empty;
+        StateHasChanged();
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("🔧 FORCE RECREATE DATABASE\n");
+
+                var baseDir = AppContext.BaseDirectory;
+                var dbPath = Path.Combine(baseDir, "vector-store.db");
+                var dbShmPath = Path.Combine(baseDir, "vector-store.db-shm");
+                var dbWalPath = Path.Combine(baseDir, "vector-store.db-wal");
+
+                sb.AppendLine($"📂 Base Directory: {baseDir}");
+                sb.AppendLine($"📄 Database: {dbPath}\n");
+
+                // 1. Clear all SQLite connection pools
+                sb.AppendLine("1️⃣ Clearing SQLite connection pools...");
+                SqliteConnection.ClearAllPools();
+                sb.AppendLine("   ✅ Done\n");
+
+                // 2. Force garbage collection
+                sb.AppendLine("2️⃣ Forcing garbage collection...");
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                sb.AppendLine("   ✅ Done\n");
+
+                // 3. Delete main database file
+                sb.AppendLine("3️⃣ Deleting database files...");
+
+                if (File.Exists(dbPath))
+                {
+                    try
+                    {
+                        File.Delete(dbPath);
+                        sb.AppendLine($"   ✅ Deleted: {dbPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        sb.AppendLine($"   ❌ Failed to delete main db: {ex.Message}");
+                    }
+                }
+                else
+                {
+                    sb.AppendLine($"   ℹ️ Main db not found: {dbPath}");
+                }
+
+                // Delete SHM file
+                if (File.Exists(dbShmPath))
+                {
+                    try
+                    {
+                        File.Delete(dbShmPath);
+                        sb.AppendLine($"   ✅ Deleted: {dbShmPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        sb.AppendLine($"   ⚠️ Could not delete SHM: {ex.Message}");
+                    }
+                }
+
+                // Delete WAL file
+                if (File.Exists(dbWalPath))
+                {
+                    try
+                    {
+                        File.Delete(dbWalPath);
+                        sb.AppendLine($"   ✅ Deleted: {dbWalPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        sb.AppendLine($"   ⚠️ Could not delete WAL: {ex.Message}");
+                    }
+                }
+
+                sb.AppendLine();
+
+                // 4. Verify deletion
+                sb.AppendLine("4️⃣ Verifying deletion...");
+                var stillExists = File.Exists(dbPath);
+                if (!stillExists)
+                {
+                    sb.AppendLine("   ✅ Database successfully deleted!\n");
+                    success = true;
+                }
+                else
+                {
+                    sb.AppendLine("   ❌ Database still exists! File may be locked.\n");
+                    success = false;
+                }
+
+                sb.AppendLine("╔═══════════════════════════════════════╗");
+                sb.AppendLine("║  NEXT STEPS                           ║");
+                sb.AppendLine("╚═══════════════════════════════════════╝");
+
+                if (success)
+                {
+                    sb.AppendLine("1. ✅ Database deleted successfully");
+                    sb.AppendLine("2. 🔄 RESTART app now (Stop & Start)");
+                    sb.AppendLine("3. 📊 Check console logs for 'Generating embeddings...'");
+                    sb.AppendLine("4. 🧪 Go to /debug-rag to verify");
+                }
+                else
+                {
+                    sb.AppendLine("❌ Could not delete database!");
+                    sb.AppendLine("\nManual steps:");
+                    sb.AppendLine("1. STOP the app completely");
+                    sb.AppendLine("2. Manually delete these files:");
+                    sb.AppendLine($"   - {dbPath}");
+                    sb.AppendLine($"   - {dbShmPath}");
+                    sb.AppendLine($"   - {dbWalPath}");
+                    sb.AppendLine("3. Delete bin/ and obj/ folders");
+                    sb.AppendLine("4. Rebuild project");
+                    sb.AppendLine("5. Start app");
+                }
+
+                result = sb.ToString();
+            }
+            catch (Exception ex)
+            {
+                result = $"❌ CRITICAL ERROR:\n{ex.Message}\n\n{ex.StackTrace}";
+                success = false;
+            }
+        });
+
+        loading = false;
+        StateHasChanged();
+    }
+}

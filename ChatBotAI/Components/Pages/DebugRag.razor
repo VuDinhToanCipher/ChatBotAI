@@ -1,0 +1,294 @@
+﻿@page "/debug-rag"
+@using ChatApp1.Services
+@using ChatApp1.Services.Ingestion
+@using Microsoft.Extensions.VectorData
+@using Microsoft.Extensions.AI
+@inject VectorStoreCollection<string, IngestedChunk> chunksCollection
+@inject VectorStoreCollection<string, IngestedDocument> documentsCollection
+@inject SemanticSearch Search
+@inject IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator
+@rendermode InteractiveServer
+
+<h3>🔍 RAG Debug Tool - Chi tiết</h3>
+
+<div style="margin: 20px; font-family: monospace;">
+    <button @onclick="CheckEverything" class="btn btn-primary">Kiểm tra TẤT CẢ</button>
+    <button @onclick="TestEmbedding" class="btn btn-info" style="margin-left: 10px;">Test Embedding Generator</button>
+
+    <hr />
+
+    @if (loading)
+    {
+        <div class="alert alert-info">⏳ Đang kiểm tra...</div>
+    }
+
+    @if (!string.IsNullOrEmpty(result))
+    {
+        <div class="alert alert-secondary">
+            <pre style="white-space: pre-wrap; font-size: 12px;">@result</pre>
+        </div>
+    }
+
+    <div style="margin-top: 20px; border: 2px solid #007bff; padding: 15px; border-radius: 5px;">
+        <h5>🔎 Test tìm kiếm thủ công:</h5>
+        <input type="text" @bind="testQuery" placeholder="VD: quy định về nghiên cứu khoa học"
+               style="width: 500px; padding: 8px; margin-right: 10px;" />
+        <button @onclick="ManualSearch" class="btn btn-warning">Tìm kiếm</button>
+
+        @if (searchResults.Any())
+        {
+            <div style="margin-top: 15px; padding: 15px; background: #e8f5e9; border-radius: 5px;">
+                <strong>✅ Tìm thấy @searchResults.Count kết quả:</strong>
+                @foreach (var (chunk, index) in searchResults.Select((c, i) => (c, i)))
+                {
+                    <div style="margin-top: 15px; padding: 12px; background: white; border-left: 4px solid #4caf50; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="color: #1976d2; font-weight: bold;">
+                            📄 [@(index + 1)] File: @chunk.DocumentId | Trang: @chunk.PageNumber
+                        </div>
+                        <div style="margin-top: 8px; padding: 8px; background: #f5f5f5; border-radius: 3px; color: #333;">
+                            @chunk.Text
+                        </div>
+                        <div style="margin-top: 5px; font-size: 11px; color: #666;">
+                            Vector: @(chunk.Vector?.Length > 0 ? $"✅ Có ({chunk.Vector.Value.Length} dims)" : "❌ THIẾU!")
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(searchAttempted))
+        {
+            <div style="margin-top: 15px; padding: 15px; background: #ffebee; border-radius: 5px;">
+                <strong>❌ Không tìm thấy kết quả nào!</strong>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string result = string.Empty;
+    private bool loading = false;
+    private string testQuery = "quy định về nghiên cứu khoa học";
+    private string searchAttempted = string.Empty;
+    private List<IngestedChunk> searchResults = new();
+
+    private async Task CheckEverything()
+    {
+        loading = true;
+        result = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("╔═══════════════════════════════════════════════════════════╗");
+            sb.AppendLine("║         KIỂM TRA TOÀN BỘ HỆ THỐNG RAG                  ║");
+            sb.AppendLine("╚═══════════════════════════════════════════════════════════╝\n");
+
+            // 1. Kiểm tra documents
+            sb.AppendLine("📚 BƯỚC 1: Kiểm tra Documents");
+            sb.AppendLine("─────────────────────────────────────");
+            var docs = await documentsCollection.GetAsync(d => true, top: 100).ToListAsync();
+            sb.AppendLine($"Tổng số documents: {docs.Count}");
+
+            if (docs.Count == 0)
+            {
+                sb.AppendLine("❌ KHÔNG CÓ DOCUMENTS NÀO!");
+                sb.AppendLine("   → Kiểm tra: Có file PDF trong wwwroot/Data không?");
+                sb.AppendLine("   → App có log 'Ingestion is up-to-date' khi khởi động không?");
+            }
+            else
+            {
+                sb.AppendLine("✅ Có documents:");
+                foreach (var doc in docs.Take(10))
+                {
+                    sb.AppendLine($"   • {doc.DocumentId}");
+                }
+                if (docs.Count > 10) sb.AppendLine($"   ... và {docs.Count - 10} file khác");
+            }
+
+            sb.AppendLine();
+
+            // 2. Kiểm tra chunks
+            sb.AppendLine("📄 BƯỚC 2: Kiểm tra Chunks");
+            sb.AppendLine("─────────────────────────────────────");
+            var chunks = await chunksCollection.GetAsync(c => true, top: 100).ToListAsync();
+            sb.AppendLine($"Tổng số chunks: {chunks.Count}");
+
+            if (chunks.Count == 0)
+            {
+                sb.AppendLine("❌ KHÔNG CÓ CHUNKS NÀO!");
+                sb.AppendLine("   → PDF không được parse hoặc lỗi chunking");
+            }
+            else
+            {
+                sb.AppendLine($"✅ Có {chunks.Count} chunks");
+
+                // Kiểm tra chunk sample
+                var sampleChunk = chunks.First();
+                sb.AppendLine($"\n📝 Sample chunk từ '{sampleChunk.DocumentId}' (trang {sampleChunk.PageNumber}):");
+                sb.AppendLine($"   Text: {sampleChunk.Text?.Substring(0, Math.Min(150, sampleChunk.Text.Length))}...");
+
+                // 3. Kiểm tra vectors
+                sb.AppendLine("\n🎯 BƯỚC 3: Kiểm tra Embeddings");
+                sb.AppendLine("─────────────────────────────────────");
+                var chunksWithVector = chunks.Where(c => c.Vector.HasValue && c.Vector.Value.Length > 0).ToList();
+                var chunksWithoutVector = chunks.Count - chunksWithVector.Count;
+
+                sb.AppendLine($"Chunks có vector: {chunksWithVector.Count}/{chunks.Count}");
+                sb.AppendLine($"Chunks thiếu vector: {chunksWithoutVector}");
+
+                if (chunksWithoutVector > 0)
+                {
+                    sb.AppendLine("❌ CÓ CHUNKS THIẾU EMBEDDING!");
+                    sb.AppendLine("   → Đây là nguyên nhân search không hoạt động!");
+                    sb.AppendLine("   → Fix: Sửa DataIngestor.cs để generate embeddings");
+                    sb.AppendLine("   → Sau đó xóa vector-store.db và restart app");
+                }
+                else
+                {
+                    sb.AppendLine($"✅ Tất cả chunks đều có embedding ({chunksWithVector.First().Vector.Value.Length} dimensions)");
+                }
+            }
+
+            // 4. Test embedding generator
+            sb.AppendLine("\n⚡ BƯỚC 4: Test Embedding Generator");
+            sb.AppendLine("─────────────────────────────────────");
+            try
+            {
+                var testEmbeddings = await embeddingGenerator.GenerateAsync(new[] { "test query" });
+                var testEmbed = testEmbeddings.FirstOrDefault();
+                if (testEmbed != null)
+                {
+                    sb.AppendLine($"✅ Embedding generator hoạt động ({testEmbed.Vector.Length} dims)");
+                }
+                else
+                {
+                    sb.AppendLine($"❌ Embedding generator không trả về kết quả");
+                }
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine($"❌ Embedding generator LỖI: {ex.Message}");
+                sb.AppendLine("   → Kiểm tra Ollama có đang chạy không: http://localhost:11434");
+                sb.AppendLine("   → Model nomic-embed-text đã pull chưa?");
+            }
+
+            // Kết luận
+            sb.AppendLine("\n╔═══════════════════════════════════════════════════════════╗");
+            sb.AppendLine("║                    KẾT LUẬN                              ║");
+            sb.AppendLine("╚═══════════════════════════════════════════════════════════╝");
+
+            if (docs.Count == 0)
+            {
+                sb.AppendLine("❌ Chưa có PDF nào được ingest");
+                sb.AppendLine("   ACTION: Thêm PDF vào wwwroot/Data và restart app");
+            }
+            else if (chunks.Count == 0)
+            {
+                sb.AppendLine("❌ PDF không được parse thành chunks");
+                sb.AppendLine("   ACTION: Kiểm tra format PDF có đúng không");
+            }
+            else if (chunks.Any(c => !c.Vector.HasValue || c.Vector.Value.Length == 0))
+            {
+                sb.AppendLine("❌ EMBEDDINGS CHƯA ĐƯỢC GENERATE - ĐÂY LÀ VẤN ĐỀ CHÍNH!");
+                sb.AppendLine("\n   FIX:");
+                sb.AppendLine("   1. Sửa DataIngestor.cs thêm code generate embeddings");
+                sb.AppendLine("   2. Xóa file vector-store.db");
+                sb.AppendLine("   3. Restart app để re-ingest");
+            }
+            else
+            {
+                sb.AppendLine("✅ HỆ THỐNG OK! Thử search ở bên dưới");
+            }
+
+            result = sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            result = $"❌ LỖI NGHIÊM TRỌNG:\n{ex.Message}\n\n{ex.StackTrace}";
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TestEmbedding()
+    {
+        loading = true;
+        result = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("🧪 TEST EMBEDDING GENERATOR\n");
+
+            var testText = "quy định về nghiên cứu khoa học";
+            sb.AppendLine($"Test text: '{testText}'");
+
+            var embeddings = await embeddingGenerator.GenerateAsync(new[] { testText });
+            var embedding = embeddings.FirstOrDefault();
+
+            if (embedding != null)
+            {
+                sb.AppendLine($"✅ Embedding generated successfully!");
+                sb.AppendLine($"   Dimensions: {embedding.Vector.Length}");
+                sb.AppendLine($"   First 5 values: {string.Join(", ", embedding.Vector.Span.ToArray().Take(5).Select(v => v.ToString("F4")))}");
+            }
+            else
+            {
+                sb.AppendLine($"❌ Không generate được embedding!");
+            }
+
+            result = sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            result = $"❌ Lỗi embedding generator:\n{ex.Message}\n\nKiểm tra:\n- Ollama có chạy không?\n- Model nomic-embed-text đã pull chưa?";
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ManualSearch()
+    {
+        if (string.IsNullOrWhiteSpace(testQuery)) return;
+
+        loading = true;
+        searchResults.Clear();
+        searchAttempted = testQuery;
+        StateHasChanged();
+
+        try
+        {
+            searchResults = (await Search.SearchAsync(testQuery, null, 5)).ToList();
+
+            if (!searchResults.Any())
+            {
+                result = $"❌ Không tìm thấy kết quả cho: '{testQuery}'\n\n" +
+                         "Có thể do:\n" +
+                         "1. Embeddings chưa được generate (check ở trên)\n" +
+                         "2. Nội dung PDF không match với câu hỏi\n" +
+                         "3. Chunk size quá nhỏ/lớn";
+            }
+            else
+            {
+                result = $"✅ Tìm thấy {searchResults.Count} kết quả!";
+            }
+        }
+        catch (Exception ex)
+        {
+            result = $"❌ LỖI KHI SEARCH: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+}

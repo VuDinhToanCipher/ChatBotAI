@@ -1,0 +1,103 @@
+﻿@page "/reset-db"
+@using ChatApp1.Services
+@using ChatApp1.Services.Ingestion
+@using Microsoft.Extensions.VectorData
+@inject VectorStoreCollection<string, IngestedChunk> chunksCollection
+@inject VectorStoreCollection<string, IngestedDocument> documentsCollection
+@rendermode InteractiveServer
+<h3>🗑️ Reset Database</h3>
+
+<div style="margin: 20px;">
+    <div class="alert alert-warning">
+        <strong>⚠️ CẢNH BÁO:</strong> Thao tác này sẽ xóa TẤT CẢ documents và chunks trong database!
+        App sẽ tự động re-ingest lại khi restart.
+    </div>
+
+    <button @onclick="ResetDB" class="btn btn-danger" disabled="@loading">
+        @(loading ? "Đang xóa..." : "🗑️ XÓA TẤT CẢ & RESET")
+    </button>
+
+    <hr />
+
+    @if (!string.IsNullOrEmpty(result))
+    {
+        <div class="alert @(success ? "alert-success" : "alert-info")">
+            <pre style="white-space: pre-wrap;">@result</pre>
+        </div>
+    }
+</div>
+
+@code {
+    private string result = string.Empty;
+    private bool loading = false;
+    private bool success = false;
+
+    private async Task ResetDB()
+    {
+        loading = true;
+        success = false;
+        result = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("🗑️ Bắt đầu xóa database...\n");
+
+            // Xóa tất cả chunks
+            sb.AppendLine("1️⃣ Đang xóa chunks...");
+            var allChunks = await chunksCollection.GetAsync(c => true, top: 10000).ToListAsync();
+            sb.AppendLine($"   Tìm thấy {allChunks.Count} chunks");
+
+            if (allChunks.Any())
+            {
+                await chunksCollection.DeleteAsync(allChunks.Select(c => c.Key));
+                sb.AppendLine($"   ✅ Đã xóa {allChunks.Count} chunks");
+            }
+            else
+            {
+                sb.AppendLine($"   ℹ️ Không có chunks để xóa");
+            }
+
+            sb.AppendLine();
+
+            // Xóa tất cả documents
+            sb.AppendLine("2️⃣ Đang xóa documents...");
+            var allDocs = await documentsCollection.GetAsync(d => true, top: 10000).ToListAsync();
+            sb.AppendLine($"   Tìm thấy {allDocs.Count} documents");
+
+            if (allDocs.Any())
+            {
+                await documentsCollection.DeleteAsync(allDocs.Select(d => d.Key));
+                sb.AppendLine($"   ✅ Đã xóa {allDocs.Count} documents");
+            }
+            else
+            {
+                sb.AppendLine($"   ℹ️ Không có documents để xóa");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("╔═══════════════════════════════════════╗");
+            sb.AppendLine("║  ✅ RESET THÀNH CÔNG!                ║");
+            sb.AppendLine("╚═══════════════════════════════════════╝");
+            sb.AppendLine();
+            sb.AppendLine("📋 BƯỚC TIẾP THEO:");
+            sb.AppendLine("1. RESTART app (Stop và Start lại)");
+            sb.AppendLine("2. App sẽ tự động ingest lại PDF");
+            sb.AppendLine("3. Vào /debug-rag để kiểm tra");
+
+            result = sb.ToString();
+            success = true;
+        }
+        catch (Exception ex)
+        {
+            result = $"❌ LỖI KHI RESET:\n{ex.Message}\n\n{ex.StackTrace}";
+            success = false;
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+}
