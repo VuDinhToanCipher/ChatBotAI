@@ -1,6 +1,4 @@
 ﻿using Microsoft.Extensions.VectorData;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace ChatApp1.Services
 {
@@ -45,7 +43,7 @@ namespace ChatApp1.Services
         {
             var greetings = new[] { "xin chào", "hi", "hello", "chào bạn", "chào", "hế lô" };
             text = text.Trim().ToLower();
-            return greetings.Any(g => text.Contains(g)) && text.Length < 20; // Giới hạn độ dài để tránh nhầm với câu hỏi dài
+            return greetings.Any(g => text.Contains(g)) && text.Length < 20; 
         }
     }
 }
