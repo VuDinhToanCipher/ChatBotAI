@@ -1,5 +1,6 @@
 ﻿@page "/"
 @page "/chat/{conversationId:guid}"
+
 @using ChatApp1.Services
 @using ChatBotAI.Application.DTOs.ConversationDTO
 @using ChatBotAI.Application.Services.ConversationServices
@@ -7,6 +8,9 @@
 @using Microsoft.Extensions.AI
 @using System.Text
 @using System.ComponentModel
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Web
+
 @inject IChatClient ChatClient
 @inject NavigationManager Nav
 @inject SemanticSearch Search
@@ -18,11 +22,11 @@
 @inject IConversationService conversation
 @inject IMessageService addmessage
 
-
 <h3>Việt - Hung ChatBot</h3>
+
 <div class="chat-container">
     <div class="chat-messages" @ref="messagesContainer">
-        @if (Messages.Count == 0)
+        @if (Messages == null || Messages.Count == 0)
         {
             <div class="empty-message">Bắt đầu trò chuyện nào!</div>
         }
@@ -36,6 +40,7 @@
             }
         }
     </div>
+
     <div class="chat-input-area">
         <input type="text"
                @bind="userInput"
@@ -47,12 +52,11 @@
         <button @onclick="SendMessage" class="send-button" disabled="@isStreaming">
             @(isStreaming ? "Đang xử lý..." : "Gửi")
         </button>
-        
     </div>
 </div>
 
 @code {
-   private const string SystemPrompt = @"
+    private const string SystemPrompt = @"
 Bạn là trợ lý ảo của khoa Công nghệ Thông tin - Đại học công nghiệp Việt-Hung(lưu ý 'Hung' không thêm dấu(không đề cập đến điều này khi trả lời)), hỗ trợ sinh viên về học tập, quy định và thông tin trường.
 
 QUY TẮC PHẢN HỒI:
@@ -95,65 +99,101 @@ PHONG CÁCH:
 - Kết thúc bằng câu hỏi gợi mở nếu có thể hỗ trợ thêm
 ";
 
+    // UI & state
     private string userInput = string.Empty;
     private ElementReference messagesContainer;
     private List<MessageDTO> Messages = new();
     private List<ChatMessage> messages = new();
     private bool isStreaming = false;
-    private int statefulMessageCount;
     private readonly ChatOptions chatOptions = new();
     private CancellationTokenSource? currentResponseCancellation;
     private Guid? currentConversationId;
     private Guid? userId;
+
     [Parameter] public Guid? conversationId { get; set; }
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+
+    protected override async Task OnInitializedAsync()
     {
-        if (firstRender)
+        // Always start messages with System prompt for the model
+        messages.Clear();
+        messages.Add(new ChatMessage(ChatRole.System, SystemPrompt));
+
+        // Attach tools/functions (kept as array to match your environment)
+        try
         {
-            statefulMessageCount = 0;
-            messages.Add(new ChatMessage(ChatRole.System, SystemPrompt));
-            chatOptions.Tools = [AIFunctionFactory.Create(SearchAsync)];
-
-            if (conversationId.HasValue)
-            {
-                Messages = await addmessage.GetMessagesByConversationAsync(conversationId.Value);
-                currentConversationId = conversationId;
-            }
-
-            try
-            {
-                var userIDString = await session.GetItemAsync<string>("UserId"); 
-                if (!string.IsNullOrEmpty(userIDString) && Guid.TryParse(userIDString, out var guid))
-                {
-                    userId = guid;
-                    Console.WriteLine($"Chat page - Đã lấy userId: {userId}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Chat page - Lỗi lấy UserId: {ex.Message}");
-            }
-
-            StateHasChanged();
-            await ScrollToBottom();
+            chatOptions.Tools = new[] { AIFunctionFactory.Create(SearchAsync) };
         }
+        catch
+        {
+            // If AIFunctionFactory or Tools not available in dev env, ignore —
+            // just keep SystemPrompt; ensures compile if tools not used.
+        }
+
+        // Try to get conversationId from URL if not provided
+        if (!conversationId.HasValue)
+        {
+            if (Guid.TryParse(Nav.Uri.Split('/').LastOrDefault(), out var parsedId) && parsedId != Guid.Empty)
+            {
+                conversationId = parsedId;
+            }
+        }
+
+        // Load history if conversationId present
+        if (conversationId.HasValue)
+        {
+            currentConversationId = conversationId;
+            Messages = (await addmessage.GetMessagesByConversationAsync(conversationId.Value))?.ToList() ?? new List<MessageDTO>();
+
+            // Rebuild 'messages' (ChatMessage list) so model receives full context
+            messages.Clear();
+            messages.Add(new ChatMessage(ChatRole.System, SystemPrompt));
+
+            foreach (var msg in Messages)
+            {
+                var role = msg.IsUser ? ChatRole.User : ChatRole.Assistant;
+                messages.Add(new ChatMessage(role, msg.Content ?? ""));
+            }
+        }
+
+        // Try to retrieve userId from session storage
+        try
+        {
+            var userIDString = await session.GetItemAsync<string>("UserId");
+            if (!string.IsNullOrEmpty(userIDString) && Guid.TryParse(userIDString, out var guid))
+            {
+                userId = guid;
+                Console.WriteLine($"Chat page - Đã lấy userId: {userId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Chat page - Lỗi lấy UserId: {ex.Message}");
+        }
+
+        StateHasChanged();
+        await ScrollToBottom();
     }
 
     private async Task SendMessage()
     {
-        if (string.IsNullOrWhiteSpace(userInput) || isStreaming) return;
+        if (string.IsNullOrWhiteSpace(userInput) || isStreaming)
+            return;
 
+        // Cancel any in-flight streaming
         CancelAnyCurrentResponse();
 
+        // Prepare user message DTO and add to UI lists
         var userMessage = new MessageDTO
         {
             Content = userInput,
             IsUser = true,
             ConversationId = currentConversationId ?? Guid.Empty
         };
+
         Messages.Add(userMessage);
         messages.Add(new ChatMessage(ChatRole.User, userInput));
 
+        // If we don't have a conversation yet, create one (if userId available)
         if (userId.HasValue && currentConversationId == null)
         {
             var title = userInput.Length > 50 ? userInput.Substring(0, 50) + "..." : userInput;
@@ -162,23 +202,61 @@ PHONG CÁCH:
             if (created?.ConversationId != Guid.Empty)
             {
                 currentConversationId = created.ConversationId;
-                userMessage.ConversationId = currentConversationId.Value;
-                await addmessage.AddMessageAsync(userMessage);
             }
         }
 
-        var responseText = new StringBuilder();
-        var aiMessage = new MessageDTO { Content = "", IsUser = false, ConversationId = currentConversationId ?? Guid.Empty };
+        // Persist user message to DB if we have conversation id
+        if (currentConversationId.HasValue)
+        {
+            userMessage.ConversationId = currentConversationId.Value;
+            try
+            {
+                await addmessage.AddMessageAsync(userMessage);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Lỗi lưu user message: {ex.Message}");
+            }
+        }
+
+        // Prepare AI message placeholder (to show streaming)
+        try
+        {
+            var ragResults = await Search.SearchAsync(userInput, null, 5);
+
+            if (ragResults != null && ragResults.Any())
+            {
+                var contextText = string.Join(
+                    "\n----------------------\n",
+                    ragResults.Select(r =>
+                        $"[Tài liệu: {r.DocumentId} - trang {r.PageNumber}]\n{r.Text}"
+                    )
+                );
+
+                // Thêm context vào messages để AI nhìn thấy
+                messages.Add(new ChatMessage(
+                    ChatRole.System,
+                    $"Dưới đây là thông tin trích từ tài liệu, hãy dựa vào đó để trả lời thật chính xác:\n{contextText}"
+                ));
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"RAG search failed: {ex.Message}");
+        }
+        var aiMessage = new MessageDTO { Content = string.Empty, IsUser = false, ConversationId = currentConversationId ?? Guid.Empty };
         Messages.Add(aiMessage);
 
         currentResponseCancellation = new CancellationTokenSource();
+        var responseText = new StringBuilder();
+
         try
         {
             isStreaming = true;
             await InvokeAsync(StateHasChanged);
 
-            await foreach (var update in ChatClient.GetStreamingResponseAsync(
-                messages.Skip(statefulMessageCount), chatOptions, currentResponseCancellation.Token))
+            // Send full history (messages) to ChatClient so it sees entire conversation
+            await foreach (var update in ChatClient.GetStreamingResponseAsync(messages, chatOptions, currentResponseCancellation.Token))
             {
                 if (update.Text != null)
                 {
@@ -188,33 +266,52 @@ PHONG CÁCH:
                 }
             }
 
-            if (userId.HasValue && currentConversationId.HasValue)
+            // Finalize: save AI message to DB (if conversation exists)
+            if (currentConversationId.HasValue)
             {
                 aiMessage.ConversationId = currentConversationId.Value;
-                await addmessage.AddMessageAsync(aiMessage);
+                aiMessage.Content = responseText.ToString();
+                try
+                {
+                    await addmessage.AddMessageAsync(aiMessage);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Lỗi lưu ai message: {ex.Message}");
+                }
             }
 
+            // Add assistant message to in-memory 'messages' so future calls include it
             messages.Add(new ChatMessage(ChatRole.Assistant, responseText.ToString()));
-            statefulMessageCount = chatOptions.ConversationId is not null ? messages.Count : 0;
         }
-        catch (Exception ex) when (!(ex is OperationCanceledException))
+        catch (OperationCanceledException)
+        {
+            // user canceled — keep placeholder content or inform user
+            aiMessage.Content = string.IsNullOrWhiteSpace(responseText.ToString()) ? "Đã hủy phản hồi." : responseText.ToString();
+        }
+        catch (Exception ex)
         {
             aiMessage.Content = "Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.";
+            Console.WriteLine($"Lỗi khi gọi ChatClient: {ex.Message}");
         }
         finally
         {
             isStreaming = false;
             userInput = string.Empty;
+
             currentResponseCancellation?.Dispose();
             currentResponseCancellation = null;
+
             await InvokeAsync(StateHasChanged);
             await ScrollToBottom();
         }
     }
+
     private async Task ScrollToBottom()
     {
         try
         {
+            // Expect a JS helper window.scrollToBottom(element) registered in wwwroot/js/site.js
             await JSRuntime.InvokeVoidAsync("scrollToBottom", messagesContainer);
         }
         catch (Exception ex)
@@ -240,6 +337,7 @@ PHONG CÁCH:
             currentResponseCancellation = null;
         }
     }
+
     [Description("Searches for information using a phrase or keyword")]
     private async Task<IEnumerable<string>> SearchAsync(
         [Description("The phrase to search for.")] string searchPhrase,

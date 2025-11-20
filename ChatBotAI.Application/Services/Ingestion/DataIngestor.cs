@@ -44,7 +44,6 @@ public class DataIngestor(
 
             var newRecords = await source.CreateChunksForDocumentAsync(modifiedDocument);
 
-            // ✨✨✨ FIX: GENERATE EMBEDDINGS CHO TỪNG CHUNK ✨✨✨
             logger.LogInformation("Generating embeddings for {chunkCount} chunks from {documentId}",
                 newRecords.Count(), modifiedDocument.DocumentId);
 
@@ -53,7 +52,7 @@ public class DataIngestor(
             {
                 try
                 {
-                    // Thử các cách gọi khác nhau tùy version
+
                     var embeddingResult = await embeddingGenerator.GenerateAsync(new[] { chunk.Text });
                     var embedding = embeddingResult.FirstOrDefault();
 
@@ -72,7 +71,7 @@ public class DataIngestor(
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Failed to generate embedding for chunk {key}", chunk.Key);
-                    // Skip chunk nếu không generate được embedding
+
                 }
             }
 
@@ -82,7 +81,6 @@ public class DataIngestor(
                 logger.LogInformation("Successfully ingested {count} chunks with embeddings",
                     chunksWithEmbeddings.Count);
             }
-            // ✨✨✨ HẾT PHẦN FIX ✨✨✨
         }
 
         logger.LogInformation("Ingestion is up-to-date");
