@@ -52,28 +52,38 @@ else
     private bool isLoggedIn = false;
     private Guid? userId;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        isLoading = true;
-        try
+        if (firstRender)
         {
-            var userIDString = await session.GetItemAsync<string>("UserID");
-            if (!string.IsNullOrEmpty(userIDString) && Guid.TryParse(userIDString, out var guid))
+            isLoading = true;
+            StateHasChanged(); 
+            try
             {
-                userId = guid;
-                isLoggedIn = true;
-                conversations = await conversationService.GetConversationByUserAsync(userId.Value);
+                var userIDString = await session.GetItemAsync<string>("UserId");
+
+                if (!string.IsNullOrEmpty(userIDString) && Guid.TryParse(userIDString, out var guid))
+                {
+                    userId = guid;
+                    isLoggedIn = true;
+                    conversations = await conversationService.GetConversationByUserAsync(userId.Value);
+                }
+                else
+                {
+                    isLoggedIn = false;
+                }
             }
-            else
+            catch (Exception ex)
             {
+                Console.WriteLine($"Lỗi lấy UserId hoặc load hội thoại: {ex.Message}");
                 isLoggedIn = false;
             }
+            finally
+            {
+                isLoading = false;
+                StateHasChanged(); 
+            }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Lỗi khi lấy UserID từ sessionStorage: {ex.Message}");
-        }
-        isLoading = false;
     }
 
     private void OpenConversation(Guid conversationId)
@@ -83,21 +93,20 @@ else
 
     private async Task DeleteConversation(Guid conversationId)
     {
-        bool confirm = await JSRuntime.InvokeAsync<bool>("confirm", "Bạn có chắc muốn xóa hội thoại này không?");
-        if (!confirm) return;
-        bool deleted = await conversationService.RemoveConversationAsync(conversationId);
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Bạn có chắc muốn xóa hội thoại này không?");
+        if (!confirmed) return;
 
+        var deleted = await conversationService.RemoveConversationAsync(conversationId);
         if (deleted)
         {
             conversations.RemoveAll(c => c.ConversationId == conversationId);
-            await InvokeAsync(StateHasChanged);
+            StateHasChanged();
         }
         else
         {
-            Console.WriteLine("Không tìm thấy hội thoại để xóa!");
+            await JSRuntime.InvokeVoidAsync("alert", "Không thể xóa hội thoại. Vui lòng thử lại!");
         }
     }
-
 
     private void GoToLogin() => Nav.NavigateTo("/login");
     private void GoToRegister() => Nav.NavigateTo("/registration");

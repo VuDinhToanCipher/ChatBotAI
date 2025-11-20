@@ -10,5 +10,6 @@ namespace ChatBotAI.Domain.Users
         public string Password { get; set; } 
         public string UserName { get; set; }
         public ICollection<Conversation> conversations { get; set; } = new List<Conversation>();
+        public bool? IsAdmin { get; set; }
     }
 }

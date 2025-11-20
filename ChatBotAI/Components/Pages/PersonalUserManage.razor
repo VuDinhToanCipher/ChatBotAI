@@ -1,0 +1,148 @@
+﻿@page "/personal-manage"
+@using Blazored.SessionStorage
+@using ChatBotAI.Application.DTOs.UserDTO
+@using ChatBotAI.Application.Services.UserServices
+@inject IUserService User_service
+@inject ISessionStorageService session
+@inject IJSRuntime JS
+@inject NavigationManager navigation
+@rendermode InteractiveServer
+
+<div class="personal-manage-container">
+    <h3>👤 Quản lí tài khoản cá nhân</h3>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-cyan" style="width:3rem;height:3rem;"></div>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger text-center">@errorMessage</div>
+    }
+    else if (user != null)
+    {
+        <div class="avatar-section">
+            <div class="avatar-placeholder">
+                @(string.IsNullOrEmpty(user?.UserName) ? "?" : user.UserName.First().ToString().ToUpper())
+            </div>
+            <p class="text-center text-muted mt-3">
+                <small>Ảnh đại diện (sẽ code thêm sau)</small>
+            </p>
+        </div>
+
+        <!-- Thông tin -->
+        <div class="info-section">
+            <div class="info-row">
+                <label>Tên người dùng:</label>
+                <span>@user.UserName</span>
+            </div>
+            <div class="info-row">
+                <label>Quyền hạn:</label>
+                <span>@(user.IsAdmin == true ? "🛡️ Admin" : "👤 User")</span>
+            </div>
+            <div class="info-row">
+                <label>Email:</label>
+                <span>@user.Email</span>
+            </div>
+        </div>
+
+        <!-- Đổi mật khẩu -->
+        <div class="password-section">
+            <h2>🔑 Đổi mật khẩu</h2>
+            <div class="password-group">
+                <label>Mật khẩu hiện tại</label>
+                <InputText class="form-control" @bind-Value="currentPassword" type="password" placeholder="Nhập mật khẩu cũ" />
+            </div>
+            <div class="password-group">
+                <label>Mật khẩu mới</label>
+                <InputText class="form-control" @bind-Value="newPassword" type="password" placeholder="Nhập mật khẩu mới" />
+            </div>
+            <button class="btn-change-password" @onclick="ChangePassword">
+                Đổi mật khẩu ngay
+            </button>
+        </div>
+    }
+</div>
+@code {
+    private bool isLoading = true;
+    private Guid userID;
+    private UserDTO user;
+    private string errorMessage;
+
+    // Thêm các property này cho password fields
+    private string currentPassword = string.Empty;
+    private string newPassword = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await Task.Delay(100);
+
+                var userIdStr = await session.GetItemAsync<string>("UserId");
+                Console.WriteLine($"UserIdStr: {userIdStr}");
+
+                if (string.IsNullOrWhiteSpace(userIdStr))
+                {
+                    errorMessage = "Không tìm thấy thông tin đăng nhập.";
+                    isLoading = false;
+                    StateHasChanged();
+                    return;
+                }
+
+                if (!Guid.TryParse(userIdStr, out userID) || userID == Guid.Empty)
+                {
+                    errorMessage = "ID người dùng không hợp lệ.";
+                    isLoading = false;
+                    StateHasChanged();
+                    return;
+                }
+
+                await GetUserAsync(userID);
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Lỗi: {ex.Message}";
+                Console.WriteLine($"Error: {ex}");
+                isLoading = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task GetUserAsync(Guid userID)
+    {
+        try
+        {
+            isLoading = true;
+            user = await User_service.GetUserAsync(userID);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Không thể tải người dùng: {ex.Message}";
+            Console.WriteLine($"Error loading user: {ex}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ChangePassword()
+    {
+        // Logic đổi mật khẩu ở đây
+        if (string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword))
+        {
+            await JS.InvokeVoidAsync("alert", "Vui lòng nhập đầy đủ thông tin!");
+            return;
+        }
+
+
+        await JS.InvokeVoidAsync("alert", "Đổi mật khẩu thành công!");
+    }
+}

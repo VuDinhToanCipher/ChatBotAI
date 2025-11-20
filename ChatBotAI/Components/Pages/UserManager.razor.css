@@ -1,0 +1,118 @@
+﻿/* ===========================
+   Search box
+=========================== */
+input.form-control[placeholder] {
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 15px;
+    border: 1.5px solid #ced4da;
+    transition: all 0.25s ease-in-out;
+}
+
+    input.form-control[placeholder]:focus {
+        border-color: #4c8bf5;
+        box-shadow: 0 0 0 3px rgba(76, 139, 245, 0.25);
+    }
+
+/* ===========================
+   Table design
+=========================== */
+.table {
+    border-radius: 12px;
+    overflow: hidden;
+    background: white;
+}
+
+    .table thead {
+        background: linear-gradient(90deg, #212529, #343a40);
+    }
+
+.table-hover tbody tr:hover {
+    background-color: #f3f7ff !important;
+    transition: 0.2s;
+}
+
+.table td, .table th {
+    vertical-align: middle;
+    padding: 12px 10px;
+}
+
+/* ===========================
+   Badges
+=========================== */
+.badge {
+    padding: 6px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+}
+
+    .badge.bg-success {
+        background-color: #2ecc71 !important;
+    }
+
+    .badge.bg-secondary {
+        background-color: #95a5a6 !important;
+    }
+
+/* ===========================
+   Buttons
+=========================== */
+.btn-sm {
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+
+.btn-primary.btn-sm {
+    background-color: #4c8bf5;
+    border-color: #4c8bf5;
+}
+
+    .btn-primary.btn-sm:hover {
+        background-color: #3a74d8;
+    }
+
+.btn-danger.btn-sm {
+    background-color: #e74c3c;
+    border-color: #e74c3c;
+}
+
+    .btn-danger.btn-sm:hover {
+        background-color: #c0392b;
+    }
+
+.btn-success.btn-sm {
+    background-color: #27ae60;
+    border-color: #27ae60;
+}
+
+    .btn-success.btn-sm:hover {
+        background-color: #1f8e4d;
+    }
+
+.btn-secondary.btn-sm:hover {
+    background-color: #6c757d;
+}
+
+/* ===========================
+   Alerts
+=========================== */
+.alert {
+    border-radius: 10px;
+    font-size: 14px;
+}
+
+/* ===========================
+   Spinner
+=========================== */
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+    color: #4c8bf5;
+}
+
+/* ===========================
+   Smooth fade animations
+=========================== */
+.fade.show {
+    transition: opacity 0.4s;
+}

@@ -53,7 +53,7 @@
 
 @code {
    private const string SystemPrompt = @"
-Bạn là trợ lý ảo của khoa Công nghệ Thông tin - Đại học công nghiệp Việt Hung(lưu ý Hung không thêm dấu), hỗ trợ sinh viên về học tập, quy định và thông tin trường.
+Bạn là trợ lý ảo của khoa Công nghệ Thông tin - Đại học công nghiệp Việt-Hung(lưu ý 'Hung' không thêm dấu(không đề cập đến điều này khi trả lời)), hỗ trợ sinh viên về học tập, quy định và thông tin trường.
 
 QUY TẮC PHẢN HỒI:
 
@@ -106,34 +106,36 @@ PHONG CÁCH:
     private Guid? currentConversationId;
     private Guid? userId;
     [Parameter] public Guid? conversationId { get; set; }
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            statefulMessageCount = 0;
+            messages.Add(new ChatMessage(ChatRole.System, SystemPrompt));
+            chatOptions.Tools = [AIFunctionFactory.Create(SearchAsync)];
 
-        statefulMessageCount = 0;
-        messages.Add(new ChatMessage(ChatRole.System, SystemPrompt));
-        chatOptions.Tools = [AIFunctionFactory.Create(SearchAsync)];
-        if (conversationId.HasValue)
-        {
-            Messages = await addmessage.GetMessagesByConversationAsync(conversationId.Value);
-            currentConversationId = conversationId;
-        }
-        // Lấy userId từ sessionStorage
-        try
-        {
-            var userIDString = await session.GetItemAsync<string>("UserID");
-            if (!string.IsNullOrEmpty(userIDString) && Guid.TryParse(userIDString, out var guid))
+            if (conversationId.HasValue)
             {
-                userId = guid;
-                Console.WriteLine($"Đã lấy userId: {userId}");
+                Messages = await addmessage.GetMessagesByConversationAsync(conversationId.Value);
+                currentConversationId = conversationId;
             }
-            else
+
+            try
             {
-                Console.WriteLine("Không tìm thấy hoặc UserID không hợp lệ trong sessionStorage.");
+                var userIDString = await session.GetItemAsync<string>("UserId"); 
+                if (!string.IsNullOrEmpty(userIDString) && Guid.TryParse(userIDString, out var guid))
+                {
+                    userId = guid;
+                    Console.WriteLine($"Chat page - Đã lấy userId: {userId}");
+                }
             }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Lỗi khi lấy UserID từ sessionStorage: {ex.Message}");
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Chat page - Lỗi lấy UserId: {ex.Message}");
+            }
+
+            StateHasChanged();
+            await ScrollToBottom();
         }
     }
 
@@ -143,59 +145,38 @@ PHONG CÁCH:
 
         CancelAnyCurrentResponse();
 
-        // Thêm tin nhắn người dùng
-        var userMessage = new MessageDTO { Content = userInput, IsUser = true, ConversationId = currentConversationId ?? Guid.Empty };
+        var userMessage = new MessageDTO
+        {
+            Content = userInput,
+            IsUser = true,
+            ConversationId = currentConversationId ?? Guid.Empty
+        };
         Messages.Add(userMessage);
         messages.Add(new ChatMessage(ChatRole.User, userInput));
 
-        // Tạo hội thoại chỉ khi đã đăng nhập
         if (userId.HasValue && currentConversationId == null)
         {
-            try
+            var title = userInput.Length > 50 ? userInput.Substring(0, 50) + "..." : userInput;
+            var conv = new ConversationDTO { UserId = userId.Value, Title = title };
+            var created = await conversation.AddConversationAsync(conv);
+            if (created?.ConversationId != Guid.Empty)
             {
-                var title = string.IsNullOrWhiteSpace(userInput) ? "Không có tiêu đề" : userInput.Substring(0, Math.Min(userInput.Length, 50));
-                var conversationDTO = new ConversationDTO
-                {
-                    UserId = userId.Value,
-                    Title = title
-                };
-                var createdConversation = await conversation.AddConversationAsync(conversationDTO);
-                if (createdConversation?.ConversationId != Guid.Empty)
-                {
-                    currentConversationId = createdConversation.ConversationId;
-                    userMessage.ConversationId = currentConversationId.Value;
-                    // Lưu tin nhắn người dùng
-                    await addmessage.AddMessageAsync(userMessage);
-                    Console.WriteLine($"Đã tạo hội thoại với ID: {currentConversationId}");
-                }
-                else
-                {
-                    Messages.Add(new MessageDTO { Content = "Không thể tạo hội thoại. Vui lòng thử lại.", IsUser = false });
-                    Console.WriteLine("Tạo hội thoại thất bại: ConversationId không hợp lệ.");
-                    await InvokeAsync(StateHasChanged);
-                    return;
-                }
-            }
-            catch (Exception ex)
-            {
-                Messages.Add(new MessageDTO { Content = "Không thể lưu hội thoại. Vui lòng thử lại.", IsUser = false });
-                Console.WriteLine($"Lỗi khi tạo hội thoại: {ex.Message}");
-                await InvokeAsync(StateHasChanged);
-                return;
+                currentConversationId = created.ConversationId;
+                userMessage.ConversationId = currentConversationId.Value;
+                await addmessage.AddMessageAsync(userMessage);
             }
         }
 
         var responseText = new StringBuilder();
         var aiMessage = new MessageDTO { Content = "", IsUser = false, ConversationId = currentConversationId ?? Guid.Empty };
         Messages.Add(aiMessage);
-        currentResponseCancellation = new CancellationTokenSource();
 
+        currentResponseCancellation = new CancellationTokenSource();
         try
         {
             isStreaming = true;
             await InvokeAsync(StateHasChanged);
 
-            // Gọi API AI
             await foreach (var update in ChatClient.GetStreamingResponseAsync(
                 messages.Skip(statefulMessageCount), chatOptions, currentResponseCancellation.Token))
             {
@@ -207,33 +188,18 @@ PHONG CÁCH:
                 }
             }
 
-            // Lưu tin nhắn AI nếu đã đăng nhập
             if (userId.HasValue && currentConversationId.HasValue)
             {
-                try
-                {
-                    aiMessage.ConversationId = currentConversationId.Value;
-                    await addmessage.AddMessageAsync(aiMessage);
-                    Console.WriteLine($"Đã lưu tin nhắn AI cho hội thoại: {currentConversationId}");
-                }
-                catch (Exception ex)
-                {
-                    aiMessage.Content = $"{aiMessage.Content}\n\n(Lưu tin nhắn thất bại, vui lòng thử lại.)";
-                    Console.WriteLine($"Lỗi khi lưu tin nhắn AI: {ex.Message}");
-                }
+                aiMessage.ConversationId = currentConversationId.Value;
+                await addmessage.AddMessageAsync(aiMessage);
             }
 
             messages.Add(new ChatMessage(ChatRole.Assistant, responseText.ToString()));
             statefulMessageCount = chatOptions.ConversationId is not null ? messages.Count : 0;
         }
-        catch (OperationCanceledException)
+        catch (Exception ex) when (!(ex is OperationCanceledException))
         {
-            aiMessage.Content = "Đã hủy phản hồi.";
-        }
-        catch (Exception ex)
-        {
-            aiMessage.Content = $"Xin lỗi, đã có lỗi xảy ra: Vui lòng thử lại.";
-            Console.WriteLine($"Lỗi khi gọi AI: {ex}");
+            aiMessage.Content = "Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.";
         }
         finally
         {
@@ -245,7 +211,6 @@ PHONG CÁCH:
             await ScrollToBottom();
         }
     }
-
     private async Task ScrollToBottom()
     {
         try

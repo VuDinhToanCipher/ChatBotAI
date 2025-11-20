@@ -6,9 +6,11 @@ namespace ChatBotAI.Application.Services.UserServices
 {
     public interface IUserService
     {
-        Task<ResponseModel> AddUserAsync(UserDTO user);
+        Task<ResponseModel> AddUserAsync(RegisterDTO user);
         Task<ResponseModel> LoginAsync(LoginDto loginDto);
-        Task<User> UpdateUserAsync(UserDTO user);
+        Task<UserDTO> UpdateUserAsync(UserDTO user);
         Task<bool> DeleteUserAsync(Guid userId);
+        Task<List<UserDTO>> DisplayUserAsync();
+        Task<UserDTO> GetUserAsync(Guid userId);
     }
 }

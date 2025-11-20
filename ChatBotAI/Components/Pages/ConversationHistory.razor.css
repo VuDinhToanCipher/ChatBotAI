@@ -1,103 +1,142 @@
-﻿.page-title {
-    text-align: center;
-    margin-bottom: 24px;
-    color: #2c3e50;
+﻿/* ===========================
+   Page Title
+=========================== */
+.page-title {
+    font-size: 26px;
     font-weight: 700;
+    margin-bottom: 20px;
+    color: #2c3e50;
 }
 
-.loading, .empty {
+/* ===========================
+   Loading / Empty / Not-Logged-In
+=========================== */
+.loading,
+.empty {
+    font-size: 16px;
+    color: #7f8c8d;
+    margin-top: 20px;
+}
+
+.not-logged-in {
     text-align: center;
-    color: #666;
-    font-style: italic;
+    padding: 30px;
+    background: #fafafa;
+    border-radius: 12px;
+    border: 1px solid #e6e6e6;
 }
 
+.auth-buttons {
+    margin-top: 18px;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.btn-login,
+.btn-register {
+    padding: 10px 18px;
+    font-size: 15px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: 0.25s;
+}
+
+.btn-login {
+    background: #4c8bf5;
+    color: white;
+}
+
+    .btn-login:hover {
+        background: #3a75d8;
+    }
+
+.btn-register {
+    background: #27ae60;
+    color: white;
+}
+
+    .btn-register:hover {
+        background: #1f8e4d;
+    }
+
+/* ===========================
+   Conversation List
+=========================== */
 .conversation-list {
     list-style: none;
     padding: 0;
-    max-width: 600px;
-    margin: 0 auto;
+    margin-top: 20px;
 }
 
 .conversation-item {
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    background: #f9fafc;
+    align-items: center;
+    background: white;
+    border: 1px solid #e6e6e6;
     padding: 14px 18px;
-    margin-bottom: 12px;
     border-radius: 12px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    transition: background 0.2s ease, transform 0.1s ease;
+    margin-bottom: 12px;
+    transition: all 0.25s ease-in-out;
+    cursor: pointer;
 }
 
     .conversation-item:hover {
-        background: #eef3f9;
-        transform: scale(1.01);
-        cursor: pointer;
+        background: #f5f9ff;
+        border-color: #d0ddff;
+        box-shadow: 0 2px 6px rgba(0, 60, 179, 0.08);
     }
 
+/* ===========================
+   Conversation Info
+=========================== */
 .conversation-info {
     display: flex;
     flex-direction: column;
-    gap: 4px;
 }
 
     .conversation-info strong {
-        color: #2d2d2d;
-        font-size: 1rem;
+        font-size: 17px;
+        color: #2c3e50;
     }
 
     .conversation-info small {
-        color: #888;
-        font-size: 0.85rem;
+        font-size: 13px;
+        color: #7f8c8d;
     }
 
+/* ===========================
+   Delete Button
+=========================== */
 .delete-btn {
+    background: #ffeded;
+    color: #e74c3c;
     border: none;
-    background: transparent;
+    padding: 8px 14px;
+    border-radius: 8px;
     cursor: pointer;
-    color: #d9534f;
-    font-size: 1.2rem;
-    transition: color 0.2s ease;
+    font-size: 15px;
+    transition: 0.25s ease;
 }
 
     .delete-btn:hover {
-        color: #c9302c;
+        background: #ffd5d5;
+        color: #c0392b;
     }
 
-/* Giao diện khi chưa đăng nhập */
-.not-logged-in {
-    text-align: center;
-    margin-top: 40px;
-    color: #444;
-}
-
-.auth-buttons {
-    margin-top: 20px;
-    display: flex;
-    justify-content: center;
-    gap: 12px;
-}
-
-.btn-login, .btn-register {
-    background-color: #007bff;
-    color: #fff;
-    border: none;
-    padding: 10px 18px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: background-color 0.2s ease;
-}
-
-    .btn-login:hover {
-        background-color: #0056b3;
+/* ===========================
+   Mobile Responsive
+=========================== */
+@media (max-width: 600px) {
+    .conversation-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
     }
 
-.btn-register {
-    background-color: #28a745;
-}
-
-    .btn-register:hover {
-        background-color: #1e7e34;
+    .delete-btn {
+        align-self: flex-end;
     }
+}

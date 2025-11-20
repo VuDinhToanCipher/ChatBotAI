@@ -1,0 +1,208 @@
+﻿@page "/documents"
+@inject IWebHostEnvironment Env
+@inject IJSRuntime JS
+@using System.IO
+@rendermode InteractiveServer
+<PageTitle>Quản lý tài liệu</PageTitle>
+
+<div class="documents-container">
+    <h2 class="mb-4">📚 Tài liệu của bạn</h2>
+
+    <!-- Upload mới -->
+    <div class="upload-section card mb-4">
+        <div class="card-body">
+            <InputFile OnChange="OnFileSelected" multiple accept=".pdf,.docx,.txt,.csv,.xlsx" class="form-control mb-3" />
+            @if (SelectedFiles.Any())
+            {
+                <div class="alert alert-info">
+                    Đã chọn: @SelectedFiles.Count() file(s) – Tổng dung lượng: @(FormatBytes(TotalSize))
+                </div>
+            }
+            <button class="btn btn-success" @onclick="UploadFiles" disabled="@IsUploading">
+                @(IsUploading ? "Đang tải lên..." : "📤 Tải lên tài liệu mới")
+            </button>
+        </div>
+    </div>
+
+    <!-- Danh sách file -->
+    <div class="files-section">
+        @if (UserFiles.Any())
+        {
+            <div class="row">
+                @foreach (var file in UserFiles)
+                {
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card file-card h-100 @(file.IsProcessing ? "border-warning" : "")">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex align-items-start justify-content-between mb-2">
+                                    <div class="file-icon me-3">
+                                        @GetFileIcon(file.Name)
+                                    </div>
+                                    <div class="text-end flex-grow-1">
+                                        <small class="text-muted d-block">@FormatBytes(file.Size)</small>    
+                                    </div>
+                                </div>
+
+                                <h6 class="file-name text-truncate" title="@file.Name">
+                                    @file.Name
+                                </h6>
+
+                                @if (file.IsProcessing)
+                                {
+                                    <span class="badge bg-warning text-dark mb-2">Đang xử lý...</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success mb-2">Đã sẵn sàng</span>
+                                }
+
+                                <div class="mt-auto btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-danger"
+                                            @onclick="async () => await ConfirmAndDelete(file.Name)">
+                                        Xóa
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5 text-muted">
+                <h5>Chưa có tài liệu nào</h5>
+                <p>Tải lên file PDF, DOCX, TXT... để AI hiểu kiến thức của bạn!</p>
+            </div>
+        }
+    </div>
+
+    @if (Message != null)
+    {
+        <div class="alert @(IsSuccess ? "alert-success" : "alert-danger") mt-4">
+            @Message
+        </div>
+    }
+</div>
+
+@code {
+    private string UserName = "guest";
+    private string UserFolder = "";
+    private List<FileInfoModel> UserFiles = new();
+    private IBrowserFile[] SelectedFiles = Array.Empty<IBrowserFile>();
+    private long TotalSize => SelectedFiles.Sum(f => f.Size);
+
+    private string? Message;
+    private bool IsSuccess;
+    private bool IsUploading;
+
+    public class FileInfoModel
+    {
+        public string Name { get; set; } = "";
+        public long Size { get; set; }
+        public DateTime UploadDate { get; set; }
+        public bool IsProcessing => UploadDate > DateTime.Now.AddMinutes(-2); 
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            UserFolder = Path.Combine(Env.WebRootPath, "Data");
+            Directory.CreateDirectory(UserFolder);
+
+            LoadUserFiles(); 
+        }
+    }
+
+    private void LoadUserFiles()
+    {
+        var dir = new DirectoryInfo(UserFolder);
+        UserFiles = dir.GetFiles()
+                       .Select(f => new FileInfoModel
+                       {
+                           Name = f.Name,
+                           Size = f.Length,
+                           UploadDate = f.LastWriteTime
+                       })
+                       .OrderByDescending(f => f.UploadDate)
+                       .ToList();
+        StateHasChanged();
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        SelectedFiles = e.GetMultipleFiles(50).ToArray();
+    }
+
+    private async Task UploadFiles()
+    {
+        if (!SelectedFiles.Any()) return;
+
+        IsUploading = true;
+        Message = null;
+
+        foreach (var file in SelectedFiles)
+        {
+            var path = Path.Combine(UserFolder, file.Name);
+            await using var stream = new FileStream(path, FileMode.Create);
+            await file.OpenReadStream(100L * 1024 * 1024).CopyToAsync(stream); // max 100MB/file
+        }
+
+        Message = $"{SelectedFiles.Length} tài liệu đã được tải lên thành công! AI sẽ học trong vài giây...";
+        IsSuccess = true;
+        SelectedFiles = Array.Empty<IBrowserFile>();
+        IsUploading = false;
+
+        LoadUserFiles(); // refresh danh sách
+    }
+
+    private async Task DeleteFile(string fileName)
+    {
+        var path = Path.Combine(UserFolder, fileName);
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+            Message = $"{fileName} đã được xóa!";
+            IsSuccess = true;
+        }
+
+        LoadUserFiles();
+    }
+
+    // Helper
+    private string FormatBytes(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int i = 0;
+        double size = bytes;
+        while (size >= 1024 && i < suffixes.Length - 1)
+        {
+            size /= 1024;
+            i++;
+        }
+        return $"{size:0.##} {suffixes[i]}";
+    }
+
+    private RenderFragment GetFileIcon(string fileName)
+    {
+        var ext = Path.GetExtension(fileName).ToLower();
+        return ext switch
+        {
+            ".pdf" => @<text>📕</text>,
+            ".docx" or ".doc" => @<text>📘</text>,
+            ".txt" => @<text>📄</text>,
+            ".xlsx" or ".xls" or ".csv" => @<text>📊</text>,
+            _ => @<text>📄</text>
+        };
+    }
+    private async Task ConfirmAndDelete(string fileName)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"Xóa vĩnh viễn {fileName} ?\nHành động này không thể hoàn tác!");
+
+        if (confirmed)
+        {
+            await DeleteFile(fileName);
+        }
+    }
+}

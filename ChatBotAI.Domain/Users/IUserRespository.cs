@@ -7,5 +7,7 @@ namespace ChatBotAI.Domain.Users
         Task<ResponseModel> LoginAsync(User user);
         Task<User> UpdateUserAsync(User user);
         Task<bool> DeleteUserAsync(Guid userId);
+        Task<List<User>> DisplayUserAsync();
+        Task<User> GetUserAsync(Guid userId);
     }
 }

@@ -1,0 +1,148 @@
+﻿/* ====================== PERSONAL MANAGE - TỐI GIẢN & SIÊU SẠCH 2025 ====================== */
+
+.personal-manage-container {
+    max-width: 700px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background: white;
+    border-radius: 14px;
+    border: 1px solid #e0e7ee;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1f2937;
+}
+
+    .personal-manage-container h3 {
+        text-align: center;
+        color: #0e7490;
+        font-weight: 600;
+        font-size: 1.7rem;
+        margin-bottom: 2rem;
+    }
+
+/* Avatar - placeholder đơn giản */
+.avatar-section {
+    text-align: center;
+    margin-bottom: 2.5rem;
+}
+
+.avatar-placeholder {
+    width: 110px;
+    height: 110px;
+    background: #06b6d4;
+    color: white;
+    font-size: 3rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    margin: 0 auto 1rem;
+}
+
+/* Info - bảng đơn giản */
+.info-section {
+    background: #f9fbfd;
+    padding: 1.5rem;
+    border-radius: 10px;
+    margin-bottom: 2rem;
+    border: 1px solid #e0e7ee;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 1.05rem;
+}
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .info-row label {
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .info-row span:last-child {
+        color: #0e7490;
+        font-weight: 500;
+    }
+
+/* Change password - form sạch sẽ */
+.password-section {
+    padding: 1.8rem;
+    background: #f9fbfd;
+    border-radius: 10px;
+    border: 1px solid #e0e7ee;
+}
+
+    .password-section h2 {
+        font-size: 1.4rem;
+        color: #0e7490;
+        margin-bottom: 1.5rem;
+        text-align: center;
+        font-weight: 600;
+    }
+
+.password-group {
+    margin-bottom: 1.3rem;
+}
+
+    .password-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        color: #374151;
+        font-size: 0.95rem;
+    }
+
+    /* ←←← CSS CHO Ô INPUT ĐÂY NÈ BRO ←←← */
+    .password-group input {
+        width: 100%;
+        padding: 0.9rem 1rem;
+        border: 1.5px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: all 0.2s ease;
+        background-color: white;
+    }
+
+        .password-group input:focus {
+            outline: none;
+            border-color: #06b6d4;
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+        }
+
+/* Nút đổi mật khẩu - đơn giản mà chất */
+.btn-change-password {
+    display: block;
+    width: 100%;
+    padding: 1rem;
+    background: #06b6d4;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+    .btn-change-password:hover {
+        background: #0891b2;
+    }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .personal-manage-container {
+        margin: 1rem;
+        padding: 1.5rem;
+    }
+
+    .info-row {
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+}

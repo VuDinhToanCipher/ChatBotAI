@@ -32,9 +32,27 @@ namespace ChatBotAI.Infrastructure.Respository
         }
 
 
-        public Task<bool> DeleteUserAsync(Guid userId)
+        public async Task<bool> DeleteUserAsync(Guid userId)
         {
-            throw new NotImplementedException();
+            var user = await _context.Users.FirstOrDefaultAsync(x=>x.UserId == userId);
+            if (user == null)
+            {
+                return false;
+            }
+            _context.Remove(user);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<List<User>> DisplayUserAsync()
+        {
+            return await _context.Users.ToListAsync();
+        }
+
+        public async Task<User> GetUserAsync(Guid userId)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(x => x.UserId == userId);
+            return user;
         }
 
         public async Task<ResponseModel> LoginAsync(User user)
@@ -59,13 +77,21 @@ namespace ChatBotAI.Infrastructure.Respository
             return new ResponseModel
             {
                 IsSuccess = true,
-                Message = Convert.ToString(valid.UserId) + "|" + valid.Name + "|" + valid.Email
+                Message = Convert.ToString(valid.UserId) + "|" + valid.Name + "|" + valid.Email + "|" + valid.IsAdmin
             };
         }
 
-        public Task<User> UpdateUserAsync(User user)
+        public async Task<User> UpdateUserAsync(User user)
         {
-            throw new NotImplementedException();
+            var result = await _context.Users.FirstOrDefaultAsync(x=> x.UserId == user.UserId);
+            if (result == null) return null;
+            result.UserName = user.UserName;
+            result.IsAdmin = user.IsAdmin;
+            result.Email = user.Email;
+            result.Name = user.Name;
+            await _context.SaveChangesAsync();
+            return result;
+
         }
     }
 }

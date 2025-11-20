@@ -9,27 +9,27 @@
     <div class="form-container">
         <h3>Tạo tài khoản</h3>
 
-        <EditForm Model="@userdto" OnValidSubmit="@HandleRegistration" FormName="Registration">
+        <EditForm Model="@userinfo" OnValidSubmit="@HandleRegistration" FormName="Registration">
             <DataAnnotationsValidator />
 
             <div class="form-group">
                 <label>Name:</label>
-                <InputText @bind-Value="userdto.Name" />
+                <InputText @bind-Value="userinfo.Name" class="form-control" />
             </div>
 
             <div class="form-group">
                 <label>UserName:</label>
-                <InputText @bind-Value="userdto.UserName" />
+                <InputText @bind-Value="userinfo.UserName" class="form-control" />
             </div>
 
             <div class="form-group">
                 <label>Email:</label>
-                <InputText @bind-Value="userdto.Email" type="email" />
+                <InputText @bind-Value="userinfo.Email" type="email" class="form-control" />
             </div>
 
             <div class="form-group">
                 <label>Password:</label>
-                <InputText @bind-Value="userdto.Password" type="password" />
+                <InputText @bind-Value="userinfo.Password" type="password" class="form-control" />
             </div>
 
             <button type="submit">Đăng ký</button>
@@ -46,14 +46,13 @@
 
 
 @code {
-    private UserDTO userdto = new();
-    private string alertmessage;
-
+    private RegisterDTO userinfo = new();
+    private string alertmessage = "";
     private async Task HandleRegistration()
     {
         try
         {
-            var registration = await register.AddUserAsync(userdto);
+            var registration = await register.AddUserAsync(userinfo);
             alertmessage = registration.Message;
             if (registration.IsSuccess)
                 NavigationManager.NavigateTo("/login");

@@ -1,0 +1,150 @@
+﻿/* ====================== DOCUMENT MANAGER - BÌNH THƯỜNG & CHUYÊN NGHIỆP ====================== */
+
+.documents-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #164e63;
+}
+
+    .documents-container h2 {
+        font-size: 1.8rem;
+        font-weight: 600;
+        text-align: center;
+        margin-bottom: 2rem;
+        color: #0e7490;
+    }
+
+/* Upload section - đơn giản */
+.upload-section {
+    background: #f8fdff;
+    border: 1px solid #a7f3d0;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+    .upload-section .form-control {
+        border: 2px dashed #67e8f9;
+        border-radius: 8px;
+        padding: 2rem;
+        text-align: center;
+        background: #f0fdfa;
+        font-size: 1rem;
+        color: #155e75;
+    }
+
+    .upload-section .btn-success {
+        background: #06b6d4;
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem 2rem;
+        font-weight: 500;
+    }
+
+        .upload-section .btn-success:hover {
+            background: #0891b2;
+        }
+
+/* File card - sạch sẽ, không bóng đổ nhiều */
+.file-card {
+    border: 1px solid #a7f3d0;
+    border-radius: 12px;
+    transition: border-color 0.2s ease;
+}
+
+    .file-card:hover {
+        border-color: #22d3ee;
+    }
+
+    .file-card .card-body {
+        padding: 1.25rem;
+    }
+
+    .file-card .file-icon {
+        font-size: 2.5rem;
+    }
+
+    .file-card .file-name {
+        font-weight: 500;
+        color: #155e75;
+        margin: 0.5rem 0;
+        font-size: 1rem;
+    }
+
+    .file-card small {
+        color: #64748b;
+    }
+
+    /* Badge đơn giản */
+    .file-card .badge {
+        font-size: 0.75rem;
+        padding: 0.35rem 0.6rem;
+    }
+
+    /* Nút hành động */
+    .file-card .btn {
+        border-radius: 8px;
+        font-size: 0.875rem;
+        padding: 0.4rem 0.8rem;
+    }
+
+    .file-card .btn-outline-primary {
+        color: #06b6d4;
+        border-color: #67e8f9;
+    }
+
+        .file-card .btn-outline-primary:hover {
+            background: #06b6d4;
+            color: white;
+        }
+
+    .file-card .btn-danger {
+        background: #ef4444;
+        border: none;
+    }
+
+        .file-card .btn-danger:hover {
+            background: #dc2626;
+        }
+
+/* Empty state - nhẹ nhàng */
+.text-center.py-5 {
+    background: #f8fdff;
+    border: 1px dashed #a7f3d0;
+    border-radius: 12px;
+    padding: 4rem 2rem;
+    color: #64748b;
+}
+
+/* Alert bình thường */
+.alert {
+    border-radius: 8px;
+    border: none;
+    font-weight: 500;
+}
+
+.alert-success {
+    background: #ecfdf5;
+    color: #065f46;
+    border-left: 4px solid #10b981;
+}
+
+.alert-danger {
+    background: #fef2f2;
+    color: #991b1b;
+    border-left: 4px solid #ef4444;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .col-md-6, .col-lg-4 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    .documents-container h2 {
+        font-size: 1.6rem;
+    }
+}

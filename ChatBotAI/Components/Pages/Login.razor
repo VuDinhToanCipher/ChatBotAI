@@ -2,14 +2,17 @@
 @using ChatBotAI.Application.DTOs.UserDTO
 @using ChatBotAI.Application.Services.UserServices
 @using Blazored.SessionStorage
+@using System.Net.Http.Json
 @inject IUserService loginservice
+@inject HttpClient httpClient
 @rendermode InteractiveServer
 @inject NavigationManager navigation
 @inject ISessionStorageService session
 
+
 <div class="page-wrapper">
     <div class="form-container">
-        <h3>Login</h3>
+        <h3>Đăng nhập</h3>
         <EditForm Model="login" OnValidSubmit="@HandleLogin" FormName="Login">
             <DataAnnotationsValidator />
             <div class="form-group">
@@ -20,14 +23,21 @@
                 <label>Password:</label>
                 <InputText @bind-Value="login.Password" type="password" class="form-control"></InputText>
             </div>
-            <button type="submit">Đăng nhập</button>
+            <button type="submit" disabled="@isLoggingIn">
+                @if (isLoggingIn)
+                {
+                    <span>Đang đăng nhập...</span>
+                }
+                else
+                {
+                    <span>Đăng nhập</span>
+                }
+            </button>
         </EditForm>
-
         @if (!string.IsNullOrEmpty(alertmessage))
         {
-            <div class="alert">@alertmessage</div>
+            <div class="alert alert-danger">@alertmessage</div>
         }
-
         <p>Chưa có tài khoản <a href="/registration">Đăng kí</a></p>
     </div>
 </div>
@@ -35,31 +45,68 @@
 @code {
     private LoginDto login = new();
     private string alertmessage;
+    private bool isLoggingIn = false;
 
     public async Task HandleLogin()
     {
+        if (isLoggingIn) return;
+
         try
         {
+            isLoggingIn = true;
+            alertmessage = string.Empty;
+
             var response = await loginservice.LoginAsync(login);
+
             if (response.IsSuccess)
             {
                 var userResponse = response.Message.Split("|");
-                await session.SetItemAsync("UserID", userResponse[0]);
-                await session.SetItemAsync("Name", userResponse[1]);
-                await session.SetItemAsync("Email", userResponse[2]);
-                navigation.NavigateTo("/");
-                navigation.Refresh(forceReload: true);
+
+                Console.WriteLine("=== LOGIN DEBUG ===");
+                Console.WriteLine($"UserResponse[0] (UserId): '{userResponse[0]}'");
+                Console.WriteLine($"UserResponse[1] (Name): '{userResponse[1]}'");
+                Console.WriteLine($"UserResponse[2] (Email): '{userResponse[2]}'");
+                Console.WriteLine($"UserResponse[3] (IsAdmin): '{userResponse[3]}'");
+
+                if (!Guid.TryParse(userResponse[0], out Guid userId) || userId == Guid.Empty)
+                {
+                    alertmessage = "ID người dùng không hợp lệ";
+                    Console.WriteLine("❌ Invalid UserId");
+                    isLoggingIn = false;
+                    return;
+                }
+
+                string name = userResponse.Length > 1 ? userResponse[1] : "User";
+                string email = userResponse.Length > 2 ? userResponse[2] : "";
+
+                bool isAdmin = false;
+                if (userResponse.Length > 3 && !string.IsNullOrWhiteSpace(userResponse[3]))
+                {
+                    bool.TryParse(userResponse[3], out isAdmin);
+                }
+
+                Console.WriteLine($"Parsed - UserId: {userId}, Name: {name}, Email: {email}, IsAdmin: {isAdmin}");
+                await session.SetItemAsync("UserId", userId.ToString());
+                await session.SetItemAsync("Name", name);
+                await session.SetItemAsync("Email", email);
+                await session.SetItemAsync("isAdmin", isAdmin);
+                Console.WriteLine("✅ Saved to session storage");
+                await Task.Delay(100);
+                navigation.NavigateTo("/", forceLoad: true);
             }
             else
             {
                 alertmessage = response.Message;
+                Console.WriteLine($"❌ Login failed: {response.Message}");
+                isLoggingIn = false;
             }
         }
         catch (Exception ex)
         {
             alertmessage = $"Lỗi khi đăng nhập: {ex.Message}";
-            Console.WriteLine(ex.ToString());
-            StateHasChanged();
+            Console.WriteLine($"❌ Exception: {ex}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            isLoggingIn = false;
         }
     }
 }
