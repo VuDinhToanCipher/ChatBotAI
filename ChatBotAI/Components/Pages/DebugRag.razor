@@ -266,7 +266,12 @@
 
         try
         {
-            searchResults = (await Search.SearchAsync(testQuery, null, 5)).ToList();
+            var searchResultsWithScore = await Search.SearchAsync(testQuery, null, 5);
+
+            searchResults = searchResultsWithScore
+                .Select(x => x.Chunk)
+                .ToList();
+
 
             if (!searchResults.Any())
             {

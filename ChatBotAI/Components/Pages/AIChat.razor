@@ -1,6 +1,5 @@
 ﻿@page "/"
 @page "/chat/{conversationId:guid}"
-
 @using ChatApp1.Services
 @using ChatBotAI.Application.DTOs.ConversationDTO
 @using ChatBotAI.Application.Services.ConversationServices
@@ -10,7 +9,6 @@
 @using System.ComponentModel
 @using Microsoft.JSInterop
 @using Microsoft.AspNetCore.Components.Web
-
 @inject IChatClient ChatClient
 @inject NavigationManager Nav
 @inject SemanticSearch Search
@@ -23,6 +21,7 @@
 @inject IMessageService addmessage
 
 <h3>Việt - Hung ChatBot</h3>
+
 
 <div class="chat-container">
     <div class="chat-messages" @ref="messagesContainer">
@@ -49,54 +48,76 @@
                placeholder="Nhập câu hỏi của bạn ..."
                class="chat-input"
                disabled="@isStreaming" />
-        <button @onclick="SendMessage" class="send-button" disabled="@isStreaming">
-            @(isStreaming ? "Đang xử lý..." : "Gửi")
-        </button>
+        @if (isStreaming)
+        {
+            <button @onclick="StopResponse" class="stop-button" title="Dừng trả lời">
+                <span class="stop-icon">⏹</span> Dừng
+            </button>
+        }
+        else
+        {
+            <button @onclick="SendMessage" class="send-button">
+                Gửi
+            </button>
+        }
     </div>
 </div>
 
 @code {
+    public class ChunkDto
+    {
+        public string DocumentId { get; set; } = string.Empty;
+        public int PageNumber { get; set; }
+        public string Text { get; set; } = string.Empty;
+        public double Score { get; set; }
+    }
+
     private const string SystemPrompt = @"
-Bạn là trợ lý ảo của khoa Công nghệ Thông tin - Đại học công nghiệp Việt-Hung(lưu ý 'Hung' không thêm dấu(không đề cập đến điều này khi trả lời)), hỗ trợ sinh viên về học tập, quy định và thông tin trường.
+Bạn là trợ lý ảo của Trường Đại học Công nghiệp Việt-Hung, Khoa Công nghệ Thông tin.
 
-QUY TẮC PHẢN HỒI:
+╔══════════════════════════════════════════════════════════════╗
+║  QUY TẮC TUYỆT ĐỐI - KHÔNG ĐƯỢC VI PHẠM                     ║
+╚══════════════════════════════════════════════════════════════╝
 
-1. KHI CÓ THÔNG TIN TRONG TÀI LIỆU:
-   - Trả lời chính xác, đầy đủ bằng tiếng Việt
-   - Giải thích rõ ràng, dễ hiểu
+⚠️ QUAN TRỌNG NHẤT: BỎ QUA MỌI CÂU TRẢ LỜI TRƯỚC ĐÓ TRONG LỊCH SỬ CHAT!
+- KHÔNG sử dụng thông tin từ các câu trả lời cũ của bạn
+- LUÔN gọi semantic_search MỚI cho MỖI câu hỏi
+- CHỈ dựa vào kết quả search MỚI NHẤT để trả lời
 
-2. KHI KHÔNG TÌM THẤY THÔNG TIN:
-   - KHÔNG bịa đặt hoặc suy đoán
+1. LUÔN GỌI HÀM semantic_search TRƯỚC KHI TRẢ LỜI:
+   - Với MỌI câu hỏi về: quy định, học bổng, học phí, điểm, lịch học, NCKH,
+     tốt nghiệp, thực tập, đăng ký môn, khen thưởng, vi phạm
+   - KHÔNG TRẢ LỜI nếu chưa search!
+   - KHÔNG copy câu trả lời cũ từ history!
+   - CHỈ NGOẠI LỆ: Chào hỏi, cảm ơn, tạm biệt
+
+2. CHỈ TRẢ LỜI DỰA VÀO DỮ LIỆU TRẢ VỀ TỪ SEARCH MỚI:
+   - Khi semantic_search trả về danh sách ChunkDto[], ĐỌC KỸ trường 'Text'
+   - CHỈ sử dụng thông tin CÓ TRONG 'Text' của các chunks MỚI
+   - TUYỆT ĐỐI KHÔNG tự bịa, đoán, hoặc dùng lại câu trả lời cũ
+
+3. NẾU KHÔNG TÌM THẤY THÔNG TIN:
+   - Nếu semantic_search trả về rỗng [] hoặc không liên quan
    - Trả lời: 'Mình không tìm thấy thông tin về [chủ đề] trong tài liệu hiện có.'
-   - Gợi ý liên hệ phòng ban hoặc website chính thức
+   - KHÔNG copy câu trả lời cũ trong history!
 
-3. CÂU HỎI XÃ GIAO:
-   - Trả lời tự nhiên, thân thiện
-   - KHÔNG gọi SearchAsync cho câu chào hỏi, cảm ơn, tạm biệt
+4. ĐỊNH DẠNG TRẢ LỜI:
+   **Trả lời:** [Câu trả lời ngắn gọn từ tài liệu MỚI search]
 
-4. CÂU HỎI MƠ HỒ:
-   - Yêu cầu làm rõ lịch sự
-   - Gợi ý các khía cạnh cụ thể có thể hỏi
+   **Chi tiết:**
+   - Điểm 1 từ tài liệu
+   - Điểm 2 từ tài liệu
 
-5. FUNCTION CALLING - QUAN TRỌNG:
-   - BẮT BUỘC gọi SearchAsync TRƯỚC KHI trả lời bất kỳ câu hỏi nào về: học bổng, quy định, học phí, lịch học, điểm, tốt nghiệp, thực tập, đăng ký môn, quy chế
-   - LUÔN LUÔN search trước, đừng bao giờ hỏi lại user trừ khi thật sự không rõ nghĩa câu hỏi
-   - Dùng từ khóa tiếng Việt chính xác, ngắn gọn
-   - KHÔNG GỌI khi: chào hỏi, cảm ơn, tạm biệt, hỏi tên bot
+   (Nguồn: [DocumentId] - Trang [PageNumber])
 
-6. ĐỊNH DẠNG:
-   - Markdown: **in đậm**, *nghiêng*, bullet points
-   - Chia đoạn ngắn, dễ đọc
-   - KHÔNG chèn link, hình ảnh, HTML
+5. PHONG CÁCH:
+   - Thân thiện: 'mình', 'bạn'
+   - Rõ ràng: Chia bullet points
+   - Trích nguồn: Luôn ghi (Nguồn: file - trang X)
 
-7. BẢO MẬT:
-   - KHÔNG cung cấp thông tin cá nhân, đề thi, tài liệu nội bộ
-
-PHONG CÁCH:
-- Thân thiện, dùng 'mình'/'bạn'
-- Ngắn gọn nhưng đầy đủ
-- Emoji nhẹ nhàng nếu phù hợp (📚 📝 ✅)
-- Kết thúc bằng câu hỏi gợi mở nếu có thể hỗ trợ thêm
+═══════════════════════════════════════════════════════════════
+NHẮC LẠI: LUÔN SEARCH MỚI, KHÔNG DÙNG CÂU TRẢ LỜI CŨ TRONG HISTORY!
+═══════════════════════════════════════════════════════════════
 ";
 
     // UI & state
@@ -112,24 +133,24 @@ PHONG CÁCH:
 
     [Parameter] public Guid? conversationId { get; set; }
 
+    private const int MaxChunks = 5;
+    // Giảm số lượng history để tránh AI bị ảnh hưởng bởi câu trả lời sai
+    private const int MaxRecentTurnPairs = 2;
+
     protected override async Task OnInitializedAsync()
     {
-        // Always start messages with System prompt for the model
         messages.Clear();
         messages.Add(new ChatMessage(ChatRole.System, SystemPrompt));
 
-        // Attach tools/functions (kept as array to match your environment)
         try
         {
             chatOptions.Tools = new[] { AIFunctionFactory.Create(SearchAsync) };
         }
-        catch
+        catch (Exception ex)
         {
-            // If AIFunctionFactory or Tools not available in dev env, ignore —
-            // just keep SystemPrompt; ensures compile if tools not used.
+            Console.WriteLine($"Error registering function: {ex.Message}");
         }
 
-        // Try to get conversationId from URL if not provided
         if (!conversationId.HasValue)
         {
             if (Guid.TryParse(Nav.Uri.Split('/').LastOrDefault(), out var parsedId) && parsedId != Guid.Empty)
@@ -138,40 +159,109 @@ PHONG CÁCH:
             }
         }
 
-        // Load history if conversationId present
         if (conversationId.HasValue)
         {
             currentConversationId = conversationId;
-            Messages = (await addmessage.GetMessagesByConversationAsync(conversationId.Value))?.ToList() ?? new List<MessageDTO>();
+            Messages = (await addmessage.GetMessagesByConversationAsync(conversationId.Value))?.ToList()
+                       ?? new List<MessageDTO>();
 
-            // Rebuild 'messages' (ChatMessage list) so model receives full context
+            // THAY ĐỔI QUAN TRỌNG: Chỉ load messages để HIỂN THỊ UI
+            // KHÔNG đưa vào context của AI để tránh lặp lại sai lầm
             messages.Clear();
             messages.Add(new ChatMessage(ChatRole.System, SystemPrompt));
 
-            foreach (var msg in Messages)
+            // Chỉ giữ lại một số ít câu hỏi của USER (không phải câu trả lời)
+            // để AI hiểu context nhưng không bị ảnh hưởng bởi câu trả lời sai
+            var recentUserQuestions = Messages
+                .Where(m => m.IsUser)
+                .TakeLast(MaxRecentTurnPairs)
+                .ToList();
+
+            foreach (var msg in recentUserQuestions)
             {
-                var role = msg.IsUser ? ChatRole.User : ChatRole.Assistant;
-                messages.Add(new ChatMessage(role, msg.Content ?? ""));
+                messages.Add(new ChatMessage(ChatRole.User, msg.Content ?? ""));
+                // Thêm placeholder để AI biết đã trả lời nhưng không copy nội dung cũ
+                messages.Add(new ChatMessage(ChatRole.Assistant,
+                    "[Đã trả lời trước đó - cần search lại nếu hỏi lại]"));
             }
         }
 
-        // Try to retrieve userId from session storage
         try
         {
             var userIDString = await session.GetItemAsync<string>("UserId");
             if (!string.IsNullOrEmpty(userIDString) && Guid.TryParse(userIDString, out var guid))
             {
                 userId = guid;
-                Console.WriteLine($"Chat page - Đã lấy userId: {userId}");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Chat page - Lỗi lấy UserId: {ex.Message}");
+            Console.WriteLine($"Chat - Error loading userId: {ex.Message}");
         }
 
         StateHasChanged();
         await ScrollToBottom();
+    }
+
+    /// <summary>
+    /// Build messages gửi cho AI - KHÔNG bao gồm câu trả lời cũ để tránh lặp sai
+    /// </summary>
+    private IEnumerable<ChatMessage> BuildModelMessages(string userQuestion)
+    {
+        var list = new List<ChatMessage>
+        {
+            new ChatMessage(ChatRole.System, SystemPrompt)
+        };
+
+        // Thêm reminder để AI luôn search mới
+        var searchReminder = @"
+⚠️ REMINDER: Đây là câu hỏi mới. Bạn PHẢI:
+1. Gọi semantic_search để tìm thông tin MỚI
+2. KHÔNG được copy/dựa vào bất kỳ câu trả lời nào trước đó
+3. CHỈ trả lời dựa trên kết quả search MỚI NHẤT
+
+Câu hỏi của người dùng: " + userQuestion;
+
+        list.Add(new ChatMessage(ChatRole.User, searchReminder));
+
+        return list;
+    }
+
+    /// <summary>
+    /// Phương thức thay thế: Giữ context nhưng thêm cảnh báo mạnh
+    /// </summary>
+    private IEnumerable<ChatMessage> BuildModelMessagesWithContext(string userQuestion)
+    {
+        var list = new List<ChatMessage>
+        {
+            new ChatMessage(ChatRole.System, SystemPrompt)
+        };
+
+        // Chỉ lấy các câu hỏi của user gần đây (không lấy câu trả lời)
+        var recentUserMessages = messages
+            .Where(m => m.Role == ChatRole.User)
+            .TakeLast(MaxRecentTurnPairs)
+            .ToList();
+
+        foreach (var msg in recentUserMessages)
+        {
+            list.Add(new ChatMessage(ChatRole.User, msg.Text ?? ""));
+            // Placeholder thay vì câu trả lời thật
+            list.Add(new ChatMessage(ChatRole.Assistant,
+                "[Đã xử lý - nếu hỏi lại cần search mới]"));
+        }
+
+        // Thêm câu hỏi hiện tại với reminder
+        var currentQuestion = $@"
+[CÂU HỎI MỚI - BẮT BUỘC SEARCH LẠI]
+{userQuestion}
+
+Lưu ý: Dù câu hỏi này có thể giống câu hỏi trước, bạn VẪN PHẢI gọi semantic_search
+và CHỈ dựa vào kết quả mới để trả lời. KHÔNG copy câu trả lời cũ.";
+
+        list.Add(new ChatMessage(ChatRole.User, currentQuestion));
+
+        return list;
     }
 
     private async Task SendMessage()
@@ -179,10 +269,8 @@ PHONG CÁCH:
         if (string.IsNullOrWhiteSpace(userInput) || isStreaming)
             return;
 
-        // Cancel any in-flight streaming
         CancelAnyCurrentResponse();
 
-        // Prepare user message DTO and add to UI lists
         var userMessage = new MessageDTO
         {
             Content = userInput,
@@ -193,7 +281,6 @@ PHONG CÁCH:
         Messages.Add(userMessage);
         messages.Add(new ChatMessage(ChatRole.User, userInput));
 
-        // If we don't have a conversation yet, create one (if userId available)
         if (userId.HasValue && currentConversationId == null)
         {
             var title = userInput.Length > 50 ? userInput.Substring(0, 50) + "..." : userInput;
@@ -205,7 +292,6 @@ PHONG CÁCH:
             }
         }
 
-        // Persist user message to DB if we have conversation id
         if (currentConversationId.HasValue)
         {
             userMessage.ConversationId = currentConversationId.Value;
@@ -215,35 +301,10 @@ PHONG CÁCH:
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Lỗi lưu user message: {ex.Message}");
+                Console.WriteLine($"Error saving user message: {ex.Message}");
             }
         }
 
-        // Prepare AI message placeholder (to show streaming)
-        try
-        {
-            var ragResults = await Search.SearchAsync(userInput, null, 5);
-
-            if (ragResults != null && ragResults.Any())
-            {
-                var contextText = string.Join(
-                    "\n----------------------\n",
-                    ragResults.Select(r =>
-                        $"[Tài liệu: {r.DocumentId} - trang {r.PageNumber}]\n{r.Text}"
-                    )
-                );
-
-                // Thêm context vào messages để AI nhìn thấy
-                messages.Add(new ChatMessage(
-                    ChatRole.System,
-                    $"Dưới đây là thông tin trích từ tài liệu, hãy dựa vào đó để trả lời thật chính xác:\n{contextText}"
-                ));
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"RAG search failed: {ex.Message}");
-        }
         var aiMessage = new MessageDTO { Content = string.Empty, IsUser = false, ConversationId = currentConversationId ?? Guid.Empty };
         Messages.Add(aiMessage);
 
@@ -255,8 +316,10 @@ PHONG CÁCH:
             isStreaming = true;
             await InvokeAsync(StateHasChanged);
 
-            // Send full history (messages) to ChatClient so it sees entire conversation
-            await foreach (var update in ChatClient.GetStreamingResponseAsync(messages, chatOptions, currentResponseCancellation.Token))
+            // SỬ DỤNG BuildModelMessages MỚI - không có câu trả lời cũ
+            var modelMessages = BuildModelMessages(userInput);
+
+            await foreach (var update in ChatClient.GetStreamingResponseAsync(modelMessages, chatOptions, currentResponseCancellation.Token))
             {
                 if (update.Text != null)
                 {
@@ -266,7 +329,6 @@ PHONG CÁCH:
                 }
             }
 
-            // Finalize: save AI message to DB (if conversation exists)
             if (currentConversationId.HasValue)
             {
                 aiMessage.ConversationId = currentConversationId.Value;
@@ -277,31 +339,28 @@ PHONG CÁCH:
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Lỗi lưu ai message: {ex.Message}");
+                    Console.WriteLine($"Error saving AI message: {ex.Message}");
                 }
             }
 
-            // Add assistant message to in-memory 'messages' so future calls include it
             messages.Add(new ChatMessage(ChatRole.Assistant, responseText.ToString()));
         }
         catch (OperationCanceledException)
         {
-            // user canceled — keep placeholder content or inform user
-            aiMessage.Content = string.IsNullOrWhiteSpace(responseText.ToString()) ? "Đã hủy phản hồi." : responseText.ToString();
+            aiMessage.Content = string.IsNullOrWhiteSpace(responseText.ToString())
+                ? "Đã hủy phản hồi." : responseText.ToString();
         }
         catch (Exception ex)
         {
             aiMessage.Content = "Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.";
-            Console.WriteLine($"Lỗi khi gọi ChatClient: {ex.Message}");
+            Console.WriteLine($"Error calling ChatClient: {ex}");
         }
         finally
         {
             isStreaming = false;
             userInput = string.Empty;
-
             currentResponseCancellation?.Dispose();
             currentResponseCancellation = null;
-
             await InvokeAsync(StateHasChanged);
             await ScrollToBottom();
         }
@@ -311,12 +370,11 @@ PHONG CÁCH:
     {
         try
         {
-            // Expect a JS helper window.scrollToBottom(element) registered in wwwroot/js/site.js
             await JSRuntime.InvokeVoidAsync("scrollToBottom", messagesContainer);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Lỗi khi cuộn xuống dưới: {ex.Message}");
+            Console.WriteLine($"Error scrolling: {ex.Message}");
         }
     }
 
@@ -325,6 +383,22 @@ PHONG CÁCH:
         if (e.Key == "Enter" && !isStreaming)
         {
             await SendMessage();
+        }
+    }
+
+    /// <summary>
+    /// Dừng phản hồi đang streaming
+    /// </summary>
+    private async Task StopResponse()
+    {
+        if (currentResponseCancellation != null && !currentResponseCancellation.IsCancellationRequested)
+        {
+            Console.WriteLine("🛑 User requested to stop response");
+            currentResponseCancellation.Cancel();
+
+            // Cập nhật UI ngay lập tức
+            isStreaming = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -338,14 +412,63 @@ PHONG CÁCH:
         }
     }
 
-    [Description("Searches for information using a phrase or keyword")]
-    private async Task<IEnumerable<string>> SearchAsync(
-        [Description("The phrase to search for.")] string searchPhrase,
-        [Description("If possible, specify the filename to search that file only. If not provided or empty, the search includes all files.")] string? filenameFilter = null)
+    [Description("Semantic search function to find relevant information. MUST be called for EVERY question about regulations, scholarships, grades, etc. Returns fresh data from documents.")]
+    private async Task<IEnumerable<ChunkDto>> SearchAsync(
+        [Description("Search query in Vietnamese")]
+        string query,
+        [Description("Max results, default 5")]
+        int top_k = MaxChunks)
     {
-        var results = await Search.SearchAsync(searchPhrase, filenameFilter, maxResults: 5);
-        return results.Select(result =>
-            $"<result filename=\"{result.DocumentId}\" page_number=\"{result.PageNumber}\">{result.Text}</result>");
+        Console.WriteLine($"🔍 SearchAsync called: query='{query}', top_k={top_k}");
+
+        try
+        {
+            var raw = await Search.SearchAsync(query, null, top_k);
+            Console.WriteLine($"📊 Search returned {raw.Count} raw results");
+
+            if (!raw.Any())
+            {
+                Console.WriteLine("⚠️ No results found!");
+                return Enumerable.Empty<ChunkDto>();
+            }
+
+            var results = raw
+                .OrderByDescending(r => r.Score)
+                .Take(top_k)
+                .Select(r => new ChunkDto
+                {
+                    DocumentId = r.Chunk.DocumentId,
+                    PageNumber = r.Chunk.PageNumber,
+                    Text = r.Chunk.Text ?? "",
+                    Score = r.Score
+                })
+                .ToList();
+
+            // Dedupe
+            var deduped = new List<ChunkDto>();
+            var seenTexts = new HashSet<string>();
+
+            foreach (var chunk in results)
+            {
+                var normalized = chunk.Text.Trim().ToLower();
+                var key = normalized.Length > 100 ? normalized.Substring(0, 100) : normalized;
+
+                if (seenTexts.Any(s => key.Contains(s) || s.Contains(key)))
+                    continue;
+
+                seenTexts.Add(key);
+                deduped.Add(chunk);
+                Console.WriteLine($"✅ Chunk: {chunk.DocumentId} p{chunk.PageNumber} (score: {chunk.Score:F3})");
+            }
+
+            Console.WriteLine($"📦 Returning {deduped.Count} chunks");
+            return deduped;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ SearchAsync error: {ex.Message}");
+            return Enumerable.Empty<ChunkDto>();
+        }
     }
 
     public void Dispose()
